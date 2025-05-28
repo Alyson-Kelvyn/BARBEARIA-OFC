@@ -23,10 +23,10 @@ const getBarberImageUrl = (barberId: string | undefined | null): string => {
   // Mapeamento de IDs de barbeiros para caminhos de imagem
   const barberImageMap: { [key: string]: string } = {
     // Substitua 'barber_id_1', etc., pelos IDs reais dos seus barbeiros
-    "817c4198-3ced-4634-bdd0-fc3c20f678ec": "/img/img1.jpg", // Exemplo
-    "fb46ce6e-baf8-4fde-947b-97f4de5451ef": "/img/barbeiro2.jpg", // Exemplo
-    "3b5bfb72-7a01-4967-99a1-31962678b0ab": "/img/barbeiro3.jpg", // Exemplo
-    "870db269-1314-46f7-a545-95185d59d693": "/img/barbeiro4.jpg", // Exemplo
+    "817c4198-3ced-4634-bdd0-fc3c20f678ec": "/img/img2.png", // Exemplo
+    "fb46ce6e-baf8-4fde-947b-97f4de5451ef": "/img/img2.png", // Exemplo
+    "3b5bfb72-7a01-4967-99a1-31962678b0ab": "/img/img2.png", // Exemplo
+    "870db269-1314-46f7-a545-95185d59d693": "/img/img2.png", // Exemplo
     // Adicione mais mapeamentos conforme necessário
   };
 
@@ -491,7 +491,11 @@ function Booking() {
       <div className="h-full overflow-y-auto">
         <div className="max-w-4xl mx-auto flex flex-col items-center p-4">
           <h1 className="text-3xl font-bold text-yellow-500 logo-text mb-0">
-            <h2>Alyson Barber</h2>
+            <img
+              src="/img/img2.png"
+              alt="Logo Alyson Barber"
+              className="h-32 w-auto"
+            />
           </h1>
 
           <div className="w-full">
@@ -914,27 +918,6 @@ function Booking() {
 
           <div className="date-picker-content">
             <div className="grid gap-4">
-              <div
-                className="bg-black/30 p-4 rounded-md border border-white/10 cursor-pointer hover:bg-black/50 transition-colors flex items-center gap-4"
-                onClick={() => {
-                  setSelectedBarber(null);
-                  setShowBarberPicker(false);
-                  setSelectedDate(null);
-                }}
-              >
-                <div className="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                  <Scissors size={24} />
-                </div>
-                <div>
-                  <p className="font-semibold text-white text-lg">
-                    Sem preferência
-                  </p>
-                  <p className="text-gray-400 text-md">
-                    Qualquer barbeiro disponível
-                  </p>
-                </div>
-              </div>
-
               {barbers.map((barber) => (
                 <div
                   key={barber.id}
