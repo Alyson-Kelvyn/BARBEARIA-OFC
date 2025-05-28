@@ -1,0 +1,259 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles */
+:root {
+  --app-height: 100%;
+}
+
+@media screen and (max-width: 640px) {
+  :root {
+    --app-height: -webkit-fill-available;
+  }
+}
+
+html, body {
+  @apply antialiased;
+  height: var(--app-height);
+}
+
+.app-background {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.95)), url('https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&q=80');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+/* Custom styles for DatePicker */
+.react-datepicker {
+  @apply !bg-transparent !border-0 !font-sans;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+@media (min-width: 768px) {
+  .react-datepicker {
+    max-width: 400px !important;
+    margin: 0 auto;
+  }
+}
+
+.react-datepicker__month-container {
+  @apply !w-full;
+}
+
+.react-datepicker__header {
+  @apply !bg-transparent !border-0 !p-0;
+}
+
+.react-datepicker__current-month {
+  @apply !text-white !text-2xl !font-bold !mb-8;
+}
+
+.react-datepicker__day-names {
+  @apply !mt-0 !mb-2 !flex !justify-between !px-2;
+}
+
+.react-datepicker__day-name {
+  @apply !text-gray-400 !text-sm !w-12 !h-12 !leading-[3rem] !m-0 !flex !items-center !justify-center;
+}
+
+@media (min-width: 768px) {
+  .react-datepicker__day-name {
+    @apply !w-10 !h-10 !leading-[2.5rem];
+  }
+}
+
+.react-datepicker__month {
+  @apply !m-0;
+}
+
+.react-datepicker__week {
+  @apply !flex !justify-between !px-2 !mb-1;
+}
+
+.react-datepicker__day {
+  @apply !text-white !w-12 !h-12 !leading-[3rem] !m-0 !text-base !flex !items-center !justify-center relative;
+}
+
+@media (min-width: 768px) {
+  .react-datepicker__day {
+    @apply !w-10 !h-10 !leading-[2.5rem];
+  }
+}
+
+.react-datepicker__day::after {
+  content: '';
+  @apply absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full;
+}
+
+.react-datepicker__day--selected {
+  @apply !bg-white !text-black !rounded-full;
+}
+
+.react-datepicker__day--disabled {
+  @apply !text-gray-600;
+}
+
+.react-datepicker__day--disabled::after {
+  @apply bg-red-500;
+}
+
+.react-datepicker__day:not(.react-datepicker__day--disabled)::after {
+  @apply bg-green-500;
+}
+
+.react-datepicker__day--outside-month {
+  @apply !text-gray-600 !pointer-events-none;
+}
+
+.react-datepicker__day--outside-month::after {
+  @apply hidden;
+}
+
+.react-datepicker__navigation {
+  @apply !top-1;
+}
+
+.react-datepicker__navigation--previous {
+  @apply !left-2;
+}
+
+.react-datepicker__navigation--next {
+  @apply !right-2;
+}
+
+.react-datepicker__navigation-icon::before {
+  @apply !border-white;
+}
+
+/* Time period and slots */
+.time-period-button {
+  @apply w-full px-4 py-4 rounded-xl text-center transition-all duration-200 font-medium text-base relative overflow-hidden;
+}
+
+.time-period-button.selected {
+  @apply bg-white text-black shadow-lg scale-[0.98] transform;
+}
+
+.time-period-button.selected::after {
+  content: '';
+  @apply absolute inset-0 bg-yellow-500/20;
+}
+
+.time-period-button:not(.selected) {
+  @apply bg-white/10 text-white hover:bg-white/20 hover:scale-[1.02] transform;
+}
+
+.time-slot-button {
+  @apply w-full px-4 py-4 rounded-xl text-center transition-all duration-200 font-medium text-base relative overflow-hidden;
+}
+
+.time-slot-button.selected {
+  @apply bg-white text-black shadow-lg scale-[0.98] transform;
+}
+
+.time-slot-button.selected::after {
+  content: '';
+  @apply absolute inset-0 bg-yellow-500/20;
+}
+
+.time-slot-button:not(.selected) {
+  @apply bg-white/10 text-white hover:bg-white/20 hover:scale-[1.02] transform;
+}
+
+.time-slot-button:active {
+  @apply scale-95 transform;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .react-datepicker__day-name,
+  .react-datepicker__day {
+    @apply !text-base !w-[14.28%] !h-12;
+  }
+
+  /* Improve touch targets */
+  input, select, button, a {
+    @apply min-h-[48px] !important;
+  }
+
+  /* Prevent text scaling */
+  input, select, textarea, button {
+    @apply text-base !important;
+  }
+}
+
+/* Fix select appearance on iOS */
+select {
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+}
+
+/* Hide scrollbar but keep functionality */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe area insets support */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
+}
+
+/* Prevent zoom on input focus on iOS */
+@media screen and (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Landscape mode optimizations */
+@media screen and (max-height: 480px) and (orientation: landscape) {
+  .min-h-screen {
+    min-height: var(--app-height);
+  }
+  
+  .landscape-scroll {
+    @apply overflow-y-auto;
+    height: var(--app-height);
+  }
+}
+
+.logo-text {
+  font-family: 'Playfair Display', serif;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Date picker modal */
+.date-picker-modal {
+  @apply fixed inset-0 bg-black z-50 flex flex-col;
+  min-height: var(--app-height);
+}
+
+.date-picker-header {
+  @apply p-4 flex items-center justify-between border-b border-white/10 sticky top-0 bg-black z-10;
+}
+
+.date-picker-content {
+  @apply flex-1 overflow-auto px-4 py-6;
+}
+
+@media (min-width: 768px) {
+  .date-picker-content {
+    @apply max-w-md mx-auto;
+  }
+}
+
+.date-picker-footer {
+  @apply p-4 border-t border-white/10 sticky bottom-0 bg-black safe-area-pb;
+}
