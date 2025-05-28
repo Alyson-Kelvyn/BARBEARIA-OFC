@@ -119,7 +119,12 @@ function Booking() {
 
       const { data, error } = await supabase
         .from("appointments")
-        .select("*")
+        .select(
+          `
+          *,
+          service:services(*)
+        `
+        )
         .gte("appointment_date", startOfDay.toISOString())
         .order("appointment_date", { ascending: true });
 
@@ -140,37 +145,111 @@ function Booking() {
 
   // Função para verificar se um horário está disponível
   const isTimeSlotAvailable = (dateTime: Date) => {
-    if (!selectedService || !selectedBarber) return false;
+    if (!selectedService || !selectedBarber) {
+      console.log("Serviço ou barbeiro não selecionado");
+      return false;
+    }
 
     if (isBefore(dateTime, new Date())) {
+      console.log("Data no passado");
       return false;
     }
 
+    const dayOfWeek = dateTime.getDay();
     const hour = dateTime.getHours();
-    if (selectedPeriod === "morning" && (hour < 8 || hour >= 12)) {
-      return false;
-    }
-    if (selectedPeriod === "afternoon" && (hour < 14 || hour >= 18)) {
+    const minutes = dateTime.getMinutes();
+
+    // Verifica se é domingo (0) ou segunda (1), quarta (3), sexta (5) ou sábado (6)
+    const isExtendedHoursDay = [1, 3, 5, 6].includes(dayOfWeek);
+    const isRegularHoursDay = [2, 4].includes(dayOfWeek); // Terça (2) e Quinta (4)
+
+    if (isExtendedHoursDay) {
+      if (selectedPeriod === "morning" && (hour < 8 || hour >= 12)) {
+        console.log("Fora do horário da manhã");
+        return false;
+      }
+      if (
+        selectedPeriod === "afternoon" &&
+        (hour < 14 || hour >= 20 || (hour === 20 && minutes > 30))
+      ) {
+        console.log("Fora do horário da tarde");
+        return false;
+      }
+    } else if (isRegularHoursDay) {
+      if (selectedPeriod === "morning" && (hour < 8 || hour >= 12)) {
+        console.log("Fora do horário da manhã");
+        return false;
+      }
+      if (selectedPeriod === "afternoon" && (hour < 14 || hour >= 18)) {
+        console.log("Fora do horário da tarde");
+        return false;
+      }
+    } else {
+      console.log("Dia não disponível para agendamento");
       return false;
     }
 
+    // Calcula o horário de término do serviço
     const slotEnd = addMinutes(dateTime, selectedService.duration);
+    console.log("Duração do serviço:", selectedService.duration, "minutos");
+    console.log("Horário de início:", format(dateTime, "HH:mm"));
+    console.log("Horário de término:", format(slotEnd, "HH:mm"));
 
-    return !appointments.some((apt) => {
+    // Verifica se o horário de término ultrapassa o período de trabalho
+    if (isExtendedHoursDay) {
+      if (selectedPeriod === "morning" && slotEnd.getHours() > 12) {
+        console.log("Serviço ultrapassa o horário da manhã");
+        return false;
+      }
+      if (
+        selectedPeriod === "afternoon" &&
+        (slotEnd.getHours() > 20 ||
+          (slotEnd.getHours() === 20 && slotEnd.getMinutes() > 30))
+      ) {
+        console.log("Serviço ultrapassa o horário da tarde");
+        return false;
+      }
+    } else if (isRegularHoursDay) {
+      if (selectedPeriod === "morning" && slotEnd.getHours() > 12) {
+        console.log("Serviço ultrapassa o horário da manhã");
+        return false;
+      }
+      if (selectedPeriod === "afternoon" && slotEnd.getHours() > 18) {
+        console.log("Serviço ultrapassa o horário da tarde");
+        return false;
+      }
+    }
+
+    // Verifica conflitos com outros agendamentos
+    const hasConflict = appointments.some((apt) => {
       if (apt.barber_id !== selectedBarber.id) return false;
 
       const appointmentStart = parseISO(apt.appointment_date);
       const appointmentEnd = addMinutes(
         appointmentStart,
-        selectedService.duration
+        apt.service?.duration || 30
       );
 
-      return (
-        (dateTime >= appointmentStart && dateTime < appointmentEnd) ||
-        (slotEnd > appointmentStart && slotEnd <= appointmentEnd) ||
-        (dateTime <= appointmentStart && slotEnd >= appointmentEnd)
-      );
+      console.log("Verificando conflito com agendamento:", {
+        barbeiro: apt.barber_id,
+        início: format(appointmentStart, "HH:mm"),
+        fim: format(appointmentEnd, "HH:mm"),
+        duração: apt.service?.duration || 30,
+      });
+
+      const hasOverlap =
+        (dateTime >= appointmentStart && dateTime < appointmentEnd) || // Novo agendamento começa durante um existente
+        (slotEnd > appointmentStart && slotEnd <= appointmentEnd) || // Novo agendamento termina durante um existente
+        (dateTime <= appointmentStart && slotEnd >= appointmentEnd); // Novo agendamento engloba um existente
+
+      if (hasOverlap) {
+        console.log("Conflito encontrado!");
+      }
+
+      return hasOverlap;
     });
+
+    return !hasConflict;
   };
 
   // Função para formatar o telefone enquanto digita
@@ -285,18 +364,20 @@ function Booking() {
 
     const slots = [];
     let startHour, endHour;
+    const dayOfWeek = selectedDate.getDay();
 
-    switch (selectedPeriod) {
-      case "morning":
-        startHour = 8;
-        endHour = 12;
-        break;
-      case "afternoon":
-        startHour = 14;
-        endHour = 18;
-        break;
-      default:
-        return [];
+    // Verifica se é um dia válido para agendamento
+    if (dayOfWeek === 0) return []; // Domingo
+
+    // Define os horários com base no dia da semana
+    if ([1, 3, 5, 6].includes(dayOfWeek)) {
+      // Segunda, Quarta, Sexta e Sábado
+      startHour = selectedPeriod === "morning" ? 8 : 14;
+      endHour = selectedPeriod === "morning" ? 12 : 20;
+    } else {
+      // Terça e Quinta
+      startHour = selectedPeriod === "morning" ? 8 : 14;
+      endHour = selectedPeriod === "morning" ? 12 : 18;
     }
 
     let currentTime = new Date(selectedDate);
@@ -304,21 +385,39 @@ function Booking() {
     const endTime = new Date(selectedDate);
     endTime.setHours(endHour, 0, 0, 0);
 
+    // Se for o dia atual, ajusta o horário inicial para o próximo intervalo disponível
     if (
       format(currentTime, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd")
     ) {
       const now = new Date();
       if (now > currentTime) {
-        currentTime = new Date(
-          now.setMinutes(Math.ceil(now.getMinutes() / 30) * 30)
-        );
+        currentTime = new Date(now);
+        currentTime.setMinutes(Math.ceil(now.getMinutes() / 30) * 30);
+        currentTime.setSeconds(0);
+        currentTime.setMilliseconds(0);
       }
     }
 
+    // Gera slots a cada 30 minutos
     while (currentTime < endTime) {
-      if (isTimeSlotAvailable(currentTime)) {
-        slots.push(new Date(currentTime));
+      // Verifica se o serviço cabe no horário atual
+      const serviceEndTime = addMinutes(currentTime, selectedService.duration);
+
+      // Verifica se o horário de término não ultrapassa o limite do dia
+      const isExtendedHoursDay = [1, 3, 5, 6].includes(dayOfWeek);
+      const maxEndHour = isExtendedHoursDay ? 20 : 18;
+      const maxEndMinutes = isExtendedHoursDay ? 30 : 0;
+
+      if (
+        serviceEndTime.getHours() < maxEndHour ||
+        (serviceEndTime.getHours() === maxEndHour &&
+          serviceEndTime.getMinutes() <= maxEndMinutes)
+      ) {
+        if (isTimeSlotAvailable(currentTime)) {
+          slots.push(new Date(currentTime));
+        }
       }
+
       currentTime = addMinutes(currentTime, 30);
     }
 

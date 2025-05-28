@@ -151,7 +151,7 @@ function Dashboard({ user }: DashboardProps) {
     console.log("Iniciando carregamento do Dashboard...");
     fetchBarbers();
     fetchAppointments();
-  }, [selectedDate, selectedBarber]);
+  }, [selectedDate, selectedBarber, filter]);
 
   const fetchBarbers = async () => {
     try {
@@ -179,14 +179,23 @@ function Dashboard({ user }: DashboardProps) {
     try {
       setLoading(true);
 
-      // Definir o período baseado na data selecionada
-      const startOfSelectedDay = startOfDay(selectedDate);
-      const endOfSelectedDay = new Date(selectedDate);
-      endOfSelectedDay.setHours(23, 59, 59, 999);
+      let startDate, endDate;
 
-      console.log("Buscando agendamentos para a data:", selectedDate);
+      if (filter === "week") {
+        startDate = startOfWeek(selectedDate, { locale: ptBR });
+        endDate = endOfWeek(selectedDate, { locale: ptBR });
+      } else {
+        startDate = startOfDay(selectedDate);
+        endDate = new Date(selectedDate);
+        endDate.setHours(23, 59, 59, 999);
+      }
 
-      // Buscar agendamentos do dia selecionado
+      console.log("Buscando agendamentos para o período:", {
+        startDate,
+        endDate,
+      });
+
+      // Buscar agendamentos do período selecionado
       let query = supabase
         .from("appointments")
         .select(
@@ -201,8 +210,8 @@ function Dashboard({ user }: DashboardProps) {
         `
         )
         .is("deleted_at", null)
-        .gte("appointment_date", startOfSelectedDay.toISOString())
-        .lte("appointment_date", endOfSelectedDay.toISOString());
+        .gte("appointment_date", startDate.toISOString())
+        .lte("appointment_date", endDate.toISOString());
 
       // Adicionar filtro por barbeiro se um barbeiro específico for selecionado
       if (selectedBarber !== "all") {
@@ -246,7 +255,7 @@ function Dashboard({ user }: DashboardProps) {
       console.log("Agendamentos encontrados:", updatedData);
       setAppointments((updatedData as Appointment[]) || []);
 
-      // Calcular estatísticas apenas para o dia selecionado
+      // Calcular estatísticas para o período selecionado
       const stats: Stats = {
         total: updatedData?.length || 0,
         confirmed:
@@ -267,7 +276,7 @@ function Dashboard({ user }: DashboardProps) {
         barberStats: {},
       };
 
-      // Calcular estatísticas por barbeiro apenas para o dia selecionado
+      // Calcular estatísticas por barbeiro para o período selecionado
       const barberStats: {
         [key: string]: {
           name: string;
@@ -476,16 +485,43 @@ function Dashboard({ user }: DashboardProps) {
 
         {/* Filtros de Período */}
         <div className="flex gap-2 sm:gap-4 mb-6 overflow-x-auto pb-2">
-          <button
-            onClick={() => setFilter("today")}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md transition-colors text-sm sm:text-base ${
-              filter === "today"
-                ? "bg-yellow-500 text-black"
-                : "bg-black/30 text-gray-400 hover:bg-black/50"
-            }`}
-          >
-            Hoje
-          </button>
+          <div className="flex items-center gap-2 bg-black/30 px-3 py-2 rounded-md border border-white/10">
+            <button
+              onClick={() => {
+                const previousDay = new Date(selectedDate);
+                previousDay.setDate(previousDay.getDate() - 1);
+                setSelectedDate(previousDay);
+                setFilter("today");
+              }}
+              className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors"
+              title="Dia anterior"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <Calendar size={20} className="text-yellow-500" />
+            <input
+              type="date"
+              value={format(selectedDate, "yyyy-MM-dd")}
+              onChange={(e) => {
+                const newDate = new Date(e.target.value);
+                setSelectedDate(newDate);
+                setFilter("today");
+              }}
+              className="bg-transparent text-white focus:outline-none focus:border-yellow-500 transition-colors"
+            />
+            <button
+              onClick={() => {
+                const nextDay = new Date(selectedDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                setSelectedDate(nextDay);
+                setFilter("today");
+              }}
+              className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors rotate-180"
+              title="Próximo dia"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          </div>
           <button
             onClick={() => setFilter("week")}
             className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md transition-colors text-sm sm:text-base ${
@@ -544,11 +580,11 @@ function Dashboard({ user }: DashboardProps) {
           <div className="bg-gradient-to-br from-yellow-500/10 to-yellow-500/5 rounded-lg p-4 sm:p-6 border border-yellow-500/20">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
-                {filter === "today"
-                  ? "Agendamentos Hoje"
-                  : filter === "week"
-                  ? "Agendamentos Esta Semana"
-                  : "Agendamentos Este Mês"}
+                {filter === "week"
+                  ? "Agendamentos da Semana"
+                  : `Agendamentos de ${format(selectedDate, "dd/MM/yyyy", {
+                      locale: ptBR,
+                    })}`}
               </h3>
               <CalendarIcon className="text-yellow-500" size={24} />
             </div>
@@ -561,11 +597,11 @@ function Dashboard({ user }: DashboardProps) {
           <div className="bg-gradient-to-br from-green-500/10 to-green-500/5 rounded-lg p-4 sm:p-6 border border-green-500/20">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
-                {filter === "today"
-                  ? "Faturamento Hoje"
-                  : filter === "week"
-                  ? "Faturamento Esta Semana"
-                  : "Faturamento Este Mês"}
+                {filter === "week"
+                  ? "Faturamento da Semana"
+                  : `Faturamento de ${format(selectedDate, "dd/MM/yyyy", {
+                      locale: ptBR,
+                    })}`}
               </h3>
               <DollarSign className="text-green-500" size={24} />
             </div>
@@ -744,7 +780,10 @@ function Dashboard({ user }: DashboardProps) {
         {/* Lista de Agendamentos Agrupados por Barbeiro */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-yellow-500">Agendamentos</h2>
+            <h2 className="text-xl font-bold text-yellow-500">
+              Agendamentos de{" "}
+              {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
+            </h2>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 bg-black/30 px-3 py-2 rounded-md border border-white/10">
                 <button
@@ -865,15 +904,23 @@ function Dashboard({ user }: DashboardProps) {
                               (appointmentMinute >= 30 ? 200 : 0) +
                               16;
 
+                        // Calcular a altura do card baseado na duração do serviço
+                        const serviceDuration =
+                          appointment.service?.duration || 30;
+                        const cardHeight = serviceDuration >= 50 ? 380 : 180; // 380px para 1 hora (50+ minutos), 180px para 30 minutos
+
                         if (appointmentFilter === "empty") return null;
 
                         return (
                           <div
                             key={appointment.id}
-                            className={`absolute left-0 right-0 p-2 rounded-md border h-[180px] flex flex-col justify-between ${getStatusColor(
+                            className={`absolute left-0 right-0 p-2 rounded-md border flex flex-col justify-between ${getStatusColor(
                               appointment.status || "pending"
                             )}`}
-                            style={{ top: `${topPosition}px` }}
+                            style={{
+                              top: `${topPosition}px`,
+                              height: `${cardHeight}px`,
+                            }}
                           >
                             <div className="flex justify-between items-center">
                               <div className="flex items-center gap-1 text-yellow-500 font-bold text-xl">
@@ -901,8 +948,8 @@ function Dashboard({ user }: DashboardProps) {
                                   : "Pendente"}
                               </span>
                             </div>
-                            <div className="text-gray-300 flex flex-col justify-center flex-1">
-                              <div className="flex items-center justify-between">
+                            <div className="text-gray-300 flex flex-col gap-1 flex-1">
+                              <div className="flex flex-col gap-2">
                                 <h4 className="font-semibold text-white text-xl">
                                   {appointment.client_name}
                                 </h4>
@@ -913,12 +960,14 @@ function Dashboard({ user }: DashboardProps) {
                                   </span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 mt-2">
-                                <Scissors size={20} />
-                                <span className="text-lg">
-                                  {appointment.service?.name}
-                                </span>
-                                <div className="flex items-center gap-1 text-yellow-500 font-semibold ml-auto">
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-1">
+                                  <Scissors size={20} />
+                                  <span className="text-lg">
+                                    {appointment.service?.name}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 text-yellow-500 font-semibold">
                                   <span className="text-lg">
                                     R$ {appointment.service?.price.toFixed(2)}
                                   </span>
@@ -940,6 +989,20 @@ function Dashboard({ user }: DashboardProps) {
                         const aptMinute = new Date(
                           apt.appointment_date
                         ).getMinutes();
+                        const serviceDuration = apt.service?.duration || 30;
+
+                        // Se o serviço dura 50+ minutos, verifica se o slot atual está dentro do intervalo
+                        if (serviceDuration >= 50) {
+                          const aptStartTime = aptHour * 60 + aptMinute;
+                          const currentSlotTime =
+                            hour * 60 + (isHalfHour ? 30 : 0);
+                          return (
+                            currentSlotTime >= aptStartTime &&
+                            currentSlotTime < aptStartTime + serviceDuration
+                          );
+                        }
+
+                        // Para serviços de 30 minutos, verifica apenas o slot exato
                         return (
                           aptHour === hour &&
                           ((isHalfHour && aptMinute >= 30) ||
