@@ -941,9 +941,11 @@ function Dashboard({ user }: DashboardProps) {
                         const cardHeight =
                           appointmentFilter === "booked"
                             ? 230 // Altura fixa para o modo "apenas agendados"
-                            : serviceDuration >= 50
-                            ? 480
-                            : 230; // Altura variável para o modo normal
+                            : serviceDuration >= 75
+                            ? 720 // 750px para 1:30 (75+ minutos)
+                            : serviceDuration >= 40
+                            ? 470 // 500px para 1 hora (40-74 minutos)
+                            : 230; // 230px para 30 minutos
 
                         if (appointmentFilter === "empty") return null;
 
@@ -1028,14 +1030,24 @@ function Dashboard({ user }: DashboardProps) {
                         ).getMinutes();
                         const serviceDuration = apt.service?.duration || 30;
 
-                        // Se o serviço dura 50+ minutos, verifica se o slot atual está dentro do intervalo
-                        if (serviceDuration >= 50) {
+                        // Verifica se o slot atual está dentro do intervalo do agendamento
+                        if (serviceDuration >= 75) {
+                          // Para serviços de 75+ minutos, ocupa 1:30
                           const aptStartTime = aptHour * 60 + aptMinute;
                           const currentSlotTime =
                             hour * 60 + (isHalfHour ? 30 : 0);
                           return (
                             currentSlotTime >= aptStartTime &&
-                            currentSlotTime < aptStartTime + serviceDuration
+                            currentSlotTime < aptStartTime + 90 // 90 minutos = 1:30
+                          );
+                        } else if (serviceDuration >= 40) {
+                          // Para serviços de 40-74 minutos, ocupa 1 hora
+                          const aptStartTime = aptHour * 60 + aptMinute;
+                          const currentSlotTime =
+                            hour * 60 + (isHalfHour ? 30 : 0);
+                          return (
+                            currentSlotTime >= aptStartTime &&
+                            currentSlotTime < aptStartTime + 60 // 60 minutos = 1 hora
                           );
                         }
 
