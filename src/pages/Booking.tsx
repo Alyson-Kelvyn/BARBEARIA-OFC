@@ -3,7 +3,14 @@ import { Calendar, Scissors, User, X, Phone, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { format, addMinutes, startOfToday, isBefore, parseISO } from "date-fns";
+import {
+  format,
+  addMinutes,
+  startOfToday,
+  isBefore,
+  parseISO,
+  differenceInMinutes,
+} from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "../supabase";
 import type { Service, Appointment, Barber } from "../types";
@@ -489,6 +496,50 @@ function Booking() {
       setLoading(false);
     }
   };
+
+  // Função para enviar lembrete via WhatsApp
+  const sendReminder = async (appointment: Appointment) => {
+    const appointmentDate = new Date(appointment.appointment_date);
+    const now = new Date();
+    const minutesUntilAppointment = differenceInMinutes(appointmentDate, now);
+
+    // Se faltar exatamente 30 minutos para o agendamento
+    if (minutesUntilAppointment === 30) {
+      const reminderMessage =
+        `*⏰ Lembrete de Agendamento*\n\n` +
+        `Olá ${appointment.client_name}! Seu agendamento está chegando:\n\n` +
+        `*✂️ Serviço:* ${appointment.service?.name}\n` +
+        `*👨‍💼 Barbeiro:* ${appointment.barber?.name}\n` +
+        `*⏰ Horário:* ${format(appointmentDate, "HH:mm")}\n\n` +
+        `_Não se esqueça do seu horário!_`;
+
+      const whatsappUrl = `https://api.whatsapp.com/send?phone=${
+        appointment.client_phone
+      }&text=${encodeURIComponent(reminderMessage)}`;
+
+      window.open(whatsappUrl, "_blank");
+    }
+  };
+
+  // Função para verificar e enviar lembretes
+  const checkAndSendReminders = () => {
+    const now = new Date();
+    appointments.forEach((appointment) => {
+      const appointmentDate = new Date(appointment.appointment_date);
+
+      // Só envia lembrete se o agendamento for para hoje
+      if (format(appointmentDate, "yyyy-MM-dd") === format(now, "yyyy-MM-dd")) {
+        sendReminder(appointment);
+      }
+    });
+  };
+
+  // Efeito para verificar lembretes a cada minuto
+  useEffect(() => {
+    const reminderInterval = setInterval(checkAndSendReminders, 60000); // 60000ms = 1 minuto
+
+    return () => clearInterval(reminderInterval);
+  }, [appointments]);
 
   // Layout da Pagina
   return (
