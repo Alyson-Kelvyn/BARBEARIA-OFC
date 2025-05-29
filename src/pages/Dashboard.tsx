@@ -935,10 +935,15 @@ function Dashboard({ user }: DashboardProps) {
                               (appointmentMinute >= 30 ? 250 : 0) +
                               16;
 
-                        // Calcular a altura do card baseado na duração do serviço
+                        // Calcular a altura do card baseado na duração do serviço e no filtro
                         const serviceDuration =
                           appointment.service?.duration || 30;
-                        const cardHeight = serviceDuration >= 50 ? 480 : 230; // 480px para 1 hora (50+ minutos), 230px para 30 minutos
+                        const cardHeight =
+                          appointmentFilter === "booked"
+                            ? 230 // Altura fixa para o modo "apenas agendados"
+                            : serviceDuration >= 50
+                            ? 480
+                            : 230; // Altura variável para o modo normal
 
                         if (appointmentFilter === "empty") return null;
 
