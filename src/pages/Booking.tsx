@@ -182,8 +182,11 @@ function Booking() {
     }
 
     // Calcula o horário de término do serviço
-    const slotEnd = addMinutes(dateTime, selectedService.duration);
-    console.log("Duração do serviço:", selectedService.duration, "minutos");
+    // Se a duração for 75 minutos, trata como 90 minutos (1h30)
+    const serviceDuration =
+      selectedService.duration === 75 ? 90 : selectedService.duration;
+    const slotEnd = addMinutes(dateTime, serviceDuration);
+    console.log("Duração do serviço:", serviceDuration, "minutos");
     console.log("Horário de início:", format(dateTime, "HH:mm"));
     console.log("Horário de término:", format(slotEnd, "HH:mm"));
 
@@ -219,14 +222,15 @@ function Booking() {
       const appointmentStart = parseISO(apt.appointment_date);
       const appointmentEnd = addMinutes(
         appointmentStart,
-        apt.service?.duration || 30
+        apt.service?.duration === 75 ? 90 : apt.service?.duration || 30
       );
 
       console.log("Verificando conflito com agendamento:", {
         barbeiro: apt.barber_id,
         início: format(appointmentStart, "HH:mm"),
         fim: format(appointmentEnd, "HH:mm"),
-        duração: apt.service?.duration || 30,
+        duração:
+          apt.service?.duration === 75 ? 90 : apt.service?.duration || 30,
       });
 
       const hasOverlap =
