@@ -23,7 +23,6 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { supabase } from "../supabase";
-import type { Barber } from "../types";
 
 // Interface para as props do componente Dashboard
 interface DashboardProps {
@@ -54,6 +53,33 @@ interface Appointment {
   service_id?: string;
   barber_id?: string;
   created_at?: string;
+}
+
+interface Service {
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
+}
+
+interface BarberData {
+  id: string;
+  name: string;
+}
+
+interface AppointmentWithRelations extends Appointment {
+  service: Service | null;
+  barber: BarberData | null;
+}
+
+interface SupabaseResponse<T> {
+  data: T | null;
+  error: {
+    message: string;
+    details?: string;
+    hint?: string;
+    code?: string;
+  } | null;
 }
 
 // Interface para as estatísticas do painel
@@ -106,7 +132,7 @@ function Dashboard({ user }: DashboardProps) {
     monthlyAppointments: 0,
     barberStats: {},
   });
-  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [barbers, setBarbers] = useState<BarberData[]>([]);
   const [selectedBarber] = useState<string>("all");
   const [appointmentFilter, setAppointmentFilter] = useState<
     "all" | "booked" | "empty"
@@ -193,7 +219,7 @@ function Dashboard({ user }: DashboardProps) {
       });
 
       // Buscar agendamentos para estatísticas
-      const { data: statsData, error: statsError } = await supabase
+      const { data: statsData, error: statsError } = (await supabase
         .from("appointments")
         .select(
           `
@@ -209,12 +235,13 @@ function Dashboard({ user }: DashboardProps) {
         .is("deleted_at", null)
         .gte("appointment_date", startDate.toISOString())
         .lte("appointment_date", endDate.toISOString())
-        .order("appointment_date", { ascending: true });
+        .order("appointment_date", { ascending: true })) as SupabaseResponse<
+        AppointmentWithRelations[]
+      >;
 
       if (statsError) {
         console.error("Erro ao buscar estatísticas:", statsError.message);
-        alert("Erro ao carregar estatísticas: " + statsError.message);
-        return;
+        throw new Error(statsError.message);
       }
 
       // Calcular estatísticas para o período selecionado
@@ -227,8 +254,10 @@ function Dashboard({ user }: DashboardProps) {
         revenue:
           statsData?.reduce(
             (acc, apt) =>
-              apt.status === "confirmed" && apt.service?.price
-                ? acc + Number(apt.service.price)
+              apt.status === "confirmed" &&
+              apt.service &&
+              typeof apt.service.price === "number"
+                ? acc + apt.service.price
                 : acc,
             0
           ) || 0,
@@ -264,12 +293,16 @@ function Dashboard({ user }: DashboardProps) {
 
       // Atualizar estatísticas do período selecionado
       statsData?.forEach((apt) => {
-        if (apt.barber) {
+        if (
+          apt.barber &&
+          typeof apt.barber.id === "string" &&
+          barberStats[apt.barber.id]
+        ) {
           barberStats[apt.barber.id].total++;
           if (apt.status === "confirmed") {
             barberStats[apt.barber.id].confirmed++;
-            if (apt.service?.price !== undefined) {
-              barberStats[apt.barber.id].revenue += Number(apt.service.price);
+            if (apt.service && typeof apt.service.price === "number") {
+              barberStats[apt.barber.id].revenue += apt.service.price;
             }
           }
         }
@@ -281,7 +314,7 @@ function Dashboard({ user }: DashboardProps) {
       const monthStart = startOfMonth(selectedDate);
       const monthEnd = endOfMonth(selectedDate);
 
-      const { data: monthlyData, error: monthlyError } = await supabase
+      const { data: monthlyData, error: monthlyError } = (await supabase
         .from("appointments")
         .select(
           `
@@ -294,13 +327,23 @@ function Dashboard({ user }: DashboardProps) {
         .is("deleted_at", null)
         .gte("appointment_date", monthStart.toISOString())
         .lte("appointment_date", monthEnd.toISOString())
-        .eq("status", "confirmed");
+        .eq("status", "confirmed")) as SupabaseResponse<
+        AppointmentWithRelations[]
+      >;
 
-      if (!monthlyError && monthlyData) {
+      if (monthlyError) {
+        console.error(
+          "Erro ao buscar estatísticas mensais:",
+          monthlyError.message
+        );
+        throw new Error(monthlyError.message);
+      }
+
+      if (monthlyData) {
         stats.monthlyRevenue = monthlyData.reduce(
           (acc, apt) =>
-            apt.service?.price !== undefined
-              ? acc + Number(apt.service.price)
+            apt.service && typeof apt.service.price === "number"
+              ? acc + apt.service.price
               : acc,
           0
         );
@@ -308,12 +351,14 @@ function Dashboard({ user }: DashboardProps) {
 
         // Atualizar estatísticas mensais por barbeiro
         monthlyData.forEach((apt) => {
-          if (apt.barber) {
+          if (
+            apt.barber &&
+            typeof apt.barber.id === "string" &&
+            barberStats[apt.barber.id]
+          ) {
             barberStats[apt.barber.id].monthlyAppointments++;
-            if (apt.service?.price !== undefined) {
-              barberStats[apt.barber.id].monthlyRevenue += Number(
-                apt.service.price
-              );
+            if (apt.service && typeof apt.service.price === "number") {
+              barberStats[apt.barber.id].monthlyRevenue += apt.service.price;
             }
           }
         });
@@ -806,7 +851,7 @@ function Dashboard({ user }: DashboardProps) {
                   Horários
                 </div>
                 <div className="bg-black/30 rounded-b-md p-2 space-y-0 min-h-[3300px]">
-                  {Array.from({ length: 11 }, (_, i) => i + 8).map((hour) => (
+                  {Array.from({ length: 13 }, (_, i) => i + 8).map((hour) => (
                     <div
                       key={hour}
                       className="h-[400px] border-b border-white/100 relative"
@@ -857,7 +902,7 @@ function Dashboard({ user }: DashboardProps) {
                   <div className="bg-black/30 rounded-b-md p-4 space-y-0 min-h-[3300px] relative">
                     {/* Grade de horários de fundo */}
                     {appointmentFilter !== "booked" &&
-                      Array.from({ length: 11 }, (_, i) => i + 8).map(
+                      Array.from({ length: 13 }, (_, i) => i + 8).map(
                         (hour) => (
                           <div
                             key={hour}
@@ -965,7 +1010,7 @@ function Dashboard({ user }: DashboardProps) {
                       })}
 
                     {/* Cards de "Nenhum agendamento" para todos os intervalos */}
-                    {Array.from({ length: 22 }, (_, i) => {
+                    {Array.from({ length: 26 }, (_, i) => {
                       const hour = Math.floor(i / 2) + 8;
                       const isHalfHour = i % 2 === 1;
                       const hasAppointment = barberAppointments.some((apt) => {
