@@ -850,16 +850,16 @@ function Dashboard({ user }: DashboardProps) {
                 <div className="bg-black/50 rounded-t-md py-3 text-center font-semibold text-yellow-500">
                   Horários
                 </div>
-                <div className="bg-black/30 rounded-b-md p-2 space-y-0 min-h-[3300px]">
+                <div className="bg-black/30 rounded-b-md p-2 space-y-0 min-h-[4500px]">
                   {Array.from({ length: 13 }, (_, i) => i + 8).map((hour) => (
                     <div
                       key={hour}
-                      className="h-[400px] border-b border-white/100 relative"
+                      className="h-[500px] border-b border-white/100 relative"
                     >
-                      <div className="text-center text-gray-400 text-sm h-[200px] flex items-center justify-center border-b border-white/100">
+                      <div className="text-center text-gray-400 text-sm h-[250px] flex items-center justify-center border-b border-white/100">
                         {`${hour.toString().padStart(2, "0")}:00`}
                       </div>
-                      <div className="text-center text-gray-400 text-sm h-[200px] flex items-center justify-center">
+                      <div className="text-center text-gray-400 text-sm h-[250px] flex items-center justify-center">
                         {`${hour.toString().padStart(2, "0")}:30`}
                       </div>
                       <div className="absolute right-0 top-0 bottom-0 w-[1px] bg-white/100"></div>
@@ -899,17 +899,17 @@ function Dashboard({ user }: DashboardProps) {
                     />
                     <span>{barber.name}</span>
                   </div>
-                  <div className="bg-black/30 rounded-b-md p-4 space-y-0 min-h-[3300px] relative">
+                  <div className="bg-black/30 rounded-b-md p-4 space-y-0 min-h-[4500px] relative">
                     {/* Grade de horários de fundo */}
                     {appointmentFilter !== "booked" &&
                       Array.from({ length: 13 }, (_, i) => i + 8).map(
                         (hour) => (
                           <div
                             key={hour}
-                            className="h-[400px] border-b border-white/10"
+                            className="h-[500px] border-b border-white/10"
                           >
-                            <div className="h-[196px] border-b border-white/10"></div>
-                            <div className="h-[196px]"></div>
+                            <div className="h-[246px] border-b border-white/10"></div>
+                            <div className="h-[246px]"></div>
                           </div>
                         )
                       )}
@@ -930,15 +930,15 @@ function Dashboard({ user }: DashboardProps) {
                         ).getMinutes();
                         const topPosition =
                           appointmentFilter === "booked"
-                            ? barberAppointments.indexOf(appointment) * 200 + 16
-                            : (appointmentHour - 8) * 400 +
-                              (appointmentMinute >= 30 ? 200 : 0) +
+                            ? barberAppointments.indexOf(appointment) * 250 + 16
+                            : (appointmentHour - 8) * 500 +
+                              (appointmentMinute >= 30 ? 250 : 0) +
                               16;
 
                         // Calcular a altura do card baseado na duração do serviço
                         const serviceDuration =
                           appointment.service?.duration || 30;
-                        const cardHeight = serviceDuration >= 50 ? 380 : 180; // 380px para 1 hora (50+ minutos), 180px para 30 minutos
+                        const cardHeight = serviceDuration >= 50 ? 480 : 230; // 480px para 1 hora (50+ minutos), 230px para 30 minutos
 
                         if (appointmentFilter === "empty") return null;
 
@@ -951,6 +951,7 @@ function Dashboard({ user }: DashboardProps) {
                             style={{
                               top: `${topPosition}px`,
                               height: `${cardHeight}px`,
+                              margin: "8px",
                             }}
                           >
                             <div className="flex justify-between items-center">
@@ -1051,11 +1052,12 @@ function Dashboard({ user }: DashboardProps) {
                       return (
                         <div
                           key={`${hour}-${isHalfHour ? "30" : "00"}`}
-                          className="absolute left-0 right-0 p-2 rounded-md border bg-blue-500/10 text-blue-500 border-yellow-500/20 h-[180px] flex items-center justify-center"
+                          className="absolute left-0 right-0 p-2 rounded-md border bg-blue-500/10 text-blue-500 border-yellow-500/20 h-[230px] flex items-center justify-center"
                           style={{
                             top: `${
-                              (hour - 8) * 400 + (isHalfHour ? 200 : 0) + 16
+                              (hour - 8) * 500 + (isHalfHour ? 250 : 0) + 16
                             }px`,
+                            margin: "8px",
                           }}
                         >
                           <div className="flex items-center justify-center gap-2">
