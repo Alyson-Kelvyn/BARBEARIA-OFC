@@ -499,46 +499,70 @@ function Booking() {
 
   // Função para enviar lembrete via WhatsApp
   const sendReminder = async (appointment: Appointment) => {
-    const appointmentDate = new Date(appointment.appointment_date);
-    const now = new Date();
-    const minutesUntilAppointment = differenceInMinutes(appointmentDate, now);
+    try {
+      const appointmentDate = new Date(appointment.appointment_date);
+      const now = new Date();
+      const minutesUntilAppointment = differenceInMinutes(appointmentDate, now);
 
-    // Se faltar exatamente 30 minutos para o agendamento
-    if (minutesUntilAppointment === 30) {
-      const reminderMessage =
-        `*⏰ Lembrete de Agendamento*\n\n` +
-        `Olá ${appointment.client_name}! Seu agendamento está chegando:\n\n` +
-        `*✂️ Serviço:* ${appointment.service?.name}\n` +
-        `*👨‍💼 Barbeiro:* ${appointment.barber?.name}\n` +
-        `*⏰ Horário:* ${format(appointmentDate, "HH:mm")}\n\n` +
-        `_Não se esqueça do seu horário!_`;
+      console.log("Verificando lembrete:", {
+        cliente: appointment.client_name,
+        horario: format(appointmentDate, "HH:mm"),
+        minutosRestantes: minutesUntilAppointment,
+      });
 
-      const whatsappUrl = `https://api.whatsapp.com/send?phone=${
-        appointment.client_phone
-      }&text=${encodeURIComponent(reminderMessage)}`;
+      // Se faltar entre 29 e 31 minutos para o agendamento (para dar uma margem de segurança)
+      if (minutesUntilAppointment >= 29 && minutesUntilAppointment <= 31) {
+        const reminderMessage =
+          `*⏰ Lembrete de Agendamento*\n\n` +
+          `Olá ${appointment.client_name}! Seu agendamento está chegando:\n\n` +
+          `*✂️ Serviço:* ${appointment.service?.name}\n` +
+          `*👨‍💼 Barbeiro:* ${appointment.barber?.name}\n` +
+          `*⏰ Horário:* ${format(appointmentDate, "HH:mm")}\n\n` +
+          `_Não se esqueça do seu horário!_`;
 
-      window.open(whatsappUrl, "_blank");
+        const whatsappUrl = `https://api.whatsapp.com/send?phone=${
+          appointment.client_phone
+        }&text=${encodeURIComponent(reminderMessage)}`;
+
+        console.log("Enviando lembrete para:", appointment.client_name);
+        window.open(whatsappUrl, "_blank");
+      }
+    } catch (error) {
+      console.error("Erro ao enviar lembrete:", error);
     }
   };
 
   // Função para verificar e enviar lembretes
   const checkAndSendReminders = () => {
-    const now = new Date();
-    appointments.forEach((appointment) => {
-      const appointmentDate = new Date(appointment.appointment_date);
+    try {
+      const now = new Date();
+      console.log("Verificando lembretes...", format(now, "HH:mm:ss"));
 
-      // Só envia lembrete se o agendamento for para hoje
-      if (format(appointmentDate, "yyyy-MM-dd") === format(now, "yyyy-MM-dd")) {
-        sendReminder(appointment);
-      }
-    });
+      appointments.forEach((appointment) => {
+        const appointmentDate = new Date(appointment.appointment_date);
+
+        // Só envia lembrete se o agendamento for para hoje
+        if (
+          format(appointmentDate, "yyyy-MM-dd") === format(now, "yyyy-MM-dd")
+        ) {
+          sendReminder(appointment);
+        }
+      });
+    } catch (error) {
+      console.error("Erro ao verificar lembretes:", error);
+    }
   };
 
-  // Efeito para verificar lembretes a cada minuto
+  // Efeito para verificar lembretes a cada 30 segundos
   useEffect(() => {
-    const reminderInterval = setInterval(checkAndSendReminders, 60000); // 60000ms = 1 minuto
+    console.log("Iniciando verificação de lembretes...");
+    checkAndSendReminders(); // Verifica imediatamente ao montar o componente
+    const reminderInterval = setInterval(checkAndSendReminders, 30000); // 30000ms = 30 segundos
 
-    return () => clearInterval(reminderInterval);
+    return () => {
+      console.log("Parando verificação de lembretes...");
+      clearInterval(reminderInterval);
+    };
   }, [appointments]);
 
   // Layout da Pagina
