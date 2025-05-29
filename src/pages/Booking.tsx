@@ -321,12 +321,17 @@ function Booking() {
       }
 
       // Abre o WhatsApp com a mensagem de confirmação
-      const message = `Olá! Gostaria de agendar um horário:\n\nNome: ${clientName}\nTelefone: ${clientPhone}\nServiço: ${
-        selectedService.name
-      }\nBarbeiro: ${selectedBarber.name}\nData: ${format(
-        selectedDate,
-        "dd/MM/yyyy"
-      )}\nHorário: ${format(selectedDate, "HH:mm")}`;
+      const message =
+        `*📅 Novo Agendamento*\n\n` +
+        `*👤 Cliente:* ${clientName}\n` +
+        `*📱 Telefone:* ${clientPhone}\n` +
+        `*✂️ Serviço:* ${selectedService.name}\n` +
+        `*💰 Valor:* R$ ${selectedService.price.toFixed(2)}\n` +
+        `*⏱️ Duração:* ${selectedService.duration} minutos\n` +
+        `*👨‍💼 Barbeiro:* ${selectedBarber.name}\n` +
+        `*📆 Data:* ${format(selectedDate, "dd/MM/yyyy")}\n` +
+        `*⏰ Horário:* ${format(selectedDate, "HH:mm")}\n\n` +
+        `_Aguardo sua confirmação!_`;
 
       const whatsappUrl = `https://api.whatsapp.com/send?phone=5585994015283&text=${encodeURIComponent(
         message
