@@ -2,38 +2,28 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   format,
-  isSameDay,
-  isAfter,
   startOfDay,
-  startOfMonth,
-  endOfMonth,
   startOfWeek,
   endOfWeek,
-  subMonths,
+  startOfMonth,
+  endOfMonth,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Scissors,
-  LogOut,
   Calendar,
   Clock,
-  Trash2,
-  CheckCircle,
-  XCircle,
   ArrowLeft,
-  UserPlus,
   X,
   Phone,
   Search,
   Filter,
   TrendingUp,
   DollarSign,
-  Users,
   Calendar as CalendarIcon,
-  User,
 } from "lucide-react";
 import { supabase } from "../supabase";
-import type { Service, Barber } from "../types";
+import type { Barber } from "../types";
 
 // Interface para as props do componente Dashboard
 interface DashboardProps {
@@ -45,29 +35,36 @@ interface DashboardProps {
 }
 
 // Interface para um agendamento
-// Ajustada para refletir a estrutura da query com relacionamentos aninhados
 interface Appointment {
   id: string;
   client_name: string;
   client_phone: string;
   appointment_date: string;
   status: "pending" | "confirmed" | "cancelled";
-  service: Service | null; // Usando o tipo Service importado
-  barber: Barber | null; // Usando o tipo Barber importado
-  service_id?: string; // Manter opcionalmente se ainda for usado em algum lugar
-  barber_id?: string; // Manter opcionalmente se ainda for usado em algum lugar
+  service: {
+    id: string;
+    name: string;
+    price: number;
+    duration: number;
+  } | null;
+  barber: {
+    id: string;
+    name: string;
+  } | null;
+  service_id?: string;
+  barber_id?: string;
   created_at?: string;
 }
 
 // Interface para as estatísticas do painel
 interface Stats {
-  total: number; // Total de agendamentos
-  confirmed: number; // Agendamentos confirmados
-  cancelled: number; // Agendamentos cancelados
-  revenue: number; // Faturamento total
-  averageTicket: number; // Ticket médio
-  monthlyRevenue: number; // Faturamento mensal
-  monthlyAppointments: number; // Agendamentos mensais
+  total: number;
+  confirmed: number;
+  cancelled: number;
+  revenue: number;
+  averageTicket: number;
+  monthlyRevenue: number;
+  monthlyAppointments: number;
   barberStats?: {
     [key: string]: {
       name: string;
@@ -92,10 +89,7 @@ function Dashboard({ user }: DashboardProps) {
   // Estados para gerenciar os dados e interface do painel
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "today" | "week" | "month">(
-    "today"
-  );
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [filter, setFilter] = useState<"all" | "today" | "week">("today");
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
@@ -113,15 +107,16 @@ function Dashboard({ user }: DashboardProps) {
     barberStats: {},
   });
   const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [selectedBarber, setSelectedBarber] = useState<string>("all");
+  const [selectedBarber] = useState<string>("all");
   const [appointmentFilter, setAppointmentFilter] = useState<
     "all" | "booked" | "empty"
   >("all");
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [listDate, setListDate] = useState(new Date());
 
   // Função para obter o período baseado no filtro
-  const getPeriod = (filter: "all" | "today" | "week" | "month"): Period => {
+  const getPeriod = (filter: "all" | "today" | "week"): Period => {
     const now = selectedDate; // Usar a data selecionada ao invés da data atual
     switch (filter) {
       case "today":
@@ -134,11 +129,6 @@ function Dashboard({ user }: DashboardProps) {
           start: startOfWeek(now, { locale: ptBR }),
           end: endOfWeek(now, { locale: ptBR }),
         };
-      case "month":
-        return {
-          start: startOfMonth(now),
-          end: endOfMonth(now),
-        };
       default:
         return {
           start: startOfDay(now),
@@ -150,8 +140,15 @@ function Dashboard({ user }: DashboardProps) {
   useEffect(() => {
     console.log("Iniciando carregamento do Dashboard...");
     fetchBarbers();
+  }, []);
+
+  useEffect(() => {
     fetchAppointments();
   }, [selectedDate, selectedBarber, filter]);
+
+  useEffect(() => {
+    fetchListAppointments();
+  }, [listDate]);
 
   const fetchBarbers = async () => {
     try {
@@ -190,13 +187,13 @@ function Dashboard({ user }: DashboardProps) {
         endDate.setHours(23, 59, 59, 999);
       }
 
-      console.log("Buscando agendamentos para o período:", {
+      console.log("Buscando agendamentos para estatísticas:", {
         startDate,
         endDate,
       });
 
-      // Buscar agendamentos do período selecionado
-      let query = supabase
+      // Buscar agendamentos para estatísticas
+      const { data: statsData, error: statsError } = await supabase
         .from("appointments")
         .select(
           `
@@ -211,59 +208,24 @@ function Dashboard({ user }: DashboardProps) {
         )
         .is("deleted_at", null)
         .gte("appointment_date", startDate.toISOString())
-        .lte("appointment_date", endDate.toISOString());
+        .lte("appointment_date", endDate.toISOString())
+        .order("appointment_date", { ascending: true });
 
-      // Adicionar filtro por barbeiro se um barbeiro específico for selecionado
-      if (selectedBarber !== "all") {
-        console.log("Filtrando por barbeiro:", selectedBarber);
-        query = query.eq("barber_id", selectedBarber);
-      }
-
-      query = query.order("appointment_date", { ascending: true });
-
-      const { data, error } = await query;
-      if (error) {
-        console.error("Erro ao buscar agendamentos:", error.message);
-        alert("Erro ao carregar agendamentos: " + error.message);
+      if (statsError) {
+        console.error("Erro ao buscar estatísticas:", statsError.message);
+        alert("Erro ao carregar estatísticas: " + statsError.message);
         return;
       }
-
-      // Confirmar automaticamente agendamentos pendentes
-      const pendingAppointments =
-        data?.filter((apt) => apt.status === "pending") || [];
-      for (const appointment of pendingAppointments) {
-        const { error: updateError } = await supabase
-          .from("appointments")
-          .update({ status: "confirmed" })
-          .eq("id", appointment.id);
-
-        if (updateError) {
-          console.error("Erro ao confirmar agendamento:", updateError.message);
-        }
-      }
-
-      // Buscar agendamentos novamente após as confirmações
-      const { data: updatedData, error: updatedError } = await query;
-      if (updatedError) {
-        console.error(
-          "Erro ao buscar agendamentos atualizados:",
-          updatedError.message
-        );
-        return;
-      }
-
-      console.log("Agendamentos encontrados:", updatedData);
-      setAppointments((updatedData as Appointment[]) || []);
 
       // Calcular estatísticas para o período selecionado
       const stats: Stats = {
-        total: updatedData?.length || 0,
+        total: statsData?.length || 0,
         confirmed:
-          updatedData?.filter((apt) => apt.status === "confirmed").length || 0,
+          statsData?.filter((apt) => apt.status === "confirmed").length || 0,
         cancelled:
-          updatedData?.filter((apt) => apt.status === "cancelled").length || 0,
+          statsData?.filter((apt) => apt.status === "cancelled").length || 0,
         revenue:
-          updatedData?.reduce(
+          statsData?.reduce(
             (acc, apt) =>
               apt.status === "confirmed" && apt.service?.price
                 ? acc + Number(apt.service.price)
@@ -276,7 +238,7 @@ function Dashboard({ user }: DashboardProps) {
         barberStats: {},
       };
 
-      // Calcular estatísticas por barbeiro para o período selecionado
+      // Calcular estatísticas por barbeiro
       const barberStats: {
         [key: string]: {
           name: string;
@@ -287,19 +249,22 @@ function Dashboard({ user }: DashboardProps) {
           monthlyAppointments: number;
         };
       } = {};
-      ((updatedData as Appointment[]) || []).forEach((apt) => {
-        if (apt.barber) {
-          if (!barberStats[apt.barber.id]) {
-            barberStats[apt.barber.id] = {
-              name: apt.barber.name,
-              total: 0,
-              confirmed: 0,
-              revenue: 0,
-              monthlyRevenue: 0,
-              monthlyAppointments: 0,
-            };
-          }
 
+      // Inicializar estatísticas para todos os barbeiros
+      barbers.forEach((barber) => {
+        barberStats[barber.id] = {
+          name: barber.name,
+          total: 0,
+          confirmed: 0,
+          revenue: 0,
+          monthlyRevenue: 0,
+          monthlyAppointments: 0,
+        };
+      });
+
+      // Atualizar estatísticas do período selecionado
+      statsData?.forEach((apt) => {
+        if (apt.barber) {
           barberStats[apt.barber.id].total++;
           if (apt.status === "confirmed") {
             barberStats[apt.barber.id].confirmed++;
@@ -312,9 +277,9 @@ function Dashboard({ user }: DashboardProps) {
 
       stats.barberStats = barberStats;
 
-      // Buscar estatísticas mensais
-      const monthStart = startOfMonth(new Date());
-      const monthEnd = endOfMonth(new Date());
+      // Buscar estatísticas mensais do mês selecionado
+      const monthStart = startOfMonth(selectedDate);
+      const monthEnd = endOfMonth(selectedDate);
 
       const { data: monthlyData, error: monthlyError } = await supabase
         .from("appointments")
@@ -341,20 +306,9 @@ function Dashboard({ user }: DashboardProps) {
         );
         stats.monthlyAppointments = monthlyData.length;
 
-        // Calcular estatísticas mensais por barbeiro
-        ((monthlyData as Appointment[]) || []).forEach((apt) => {
+        // Atualizar estatísticas mensais por barbeiro
+        monthlyData.forEach((apt) => {
           if (apt.barber) {
-            if (!barberStats[apt.barber.id]) {
-              barberStats[apt.barber.id] = {
-                name: apt.barber.name,
-                total: 0,
-                confirmed: 0,
-                revenue: 0,
-                monthlyRevenue: 0,
-                monthlyAppointments: 0,
-              };
-            }
-
             barberStats[apt.barber.id].monthlyAppointments++;
             if (apt.service?.price !== undefined) {
               barberStats[apt.barber.id].monthlyRevenue += Number(
@@ -367,8 +321,89 @@ function Dashboard({ user }: DashboardProps) {
 
       setStats(stats);
     } catch (error) {
-      console.error("Erro ao buscar agendamentos:", error);
-      alert("Erro ao carregar agendamentos. Por favor, tente novamente.");
+      console.error("Erro ao buscar estatísticas:", error);
+      alert("Erro ao carregar estatísticas. Por favor, tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchListAppointments = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("appointments")
+        .select(
+          `
+          id,
+          client_name,
+          client_phone,
+          appointment_date,
+          status,
+          service:services(id, name, price, duration),
+          barber:barbers(id, name)
+        `
+        )
+        .is("deleted_at", null)
+        .gte("appointment_date", startOfDay(listDate).toISOString())
+        .lte(
+          "appointment_date",
+          new Date(listDate.setHours(23, 59, 59, 999)).toISOString()
+        )
+        .order("appointment_date", { ascending: true });
+
+      if (error) {
+        console.error("Erro ao buscar agendamentos da lista:", error.message);
+        return;
+      }
+
+      // Confirmar automaticamente agendamentos pendentes
+      const pendingAppointments =
+        data?.filter((apt) => apt.status === "pending") || [];
+      for (const appointment of pendingAppointments) {
+        const { error: updateError } = await supabase
+          .from("appointments")
+          .update({ status: "confirmed" })
+          .eq("id", appointment.id);
+
+        if (updateError) {
+          console.error("Erro ao confirmar agendamento:", updateError.message);
+        }
+      }
+
+      // Buscar agendamentos novamente após as confirmações
+      const { data: updatedData, error: updatedError } = await supabase
+        .from("appointments")
+        .select(
+          `
+          id,
+          client_name,
+          client_phone,
+          appointment_date,
+          status,
+          service:services(id, name, price, duration),
+          barber:barbers(id, name)
+        `
+        )
+        .is("deleted_at", null)
+        .gte("appointment_date", startOfDay(listDate).toISOString())
+        .lte(
+          "appointment_date",
+          new Date(listDate.setHours(23, 59, 59, 999)).toISOString()
+        )
+        .order("appointment_date", { ascending: true });
+
+      if (updatedError) {
+        console.error(
+          "Erro ao buscar agendamentos atualizados:",
+          updatedError.message
+        );
+        return;
+      }
+
+      setAppointments(updatedData as unknown as Appointment[]);
+    } catch (error) {
+      console.error("Erro ao buscar agendamentos da lista:", error);
     } finally {
       setLoading(false);
     }
@@ -420,7 +455,7 @@ function Dashboard({ user }: DashboardProps) {
   const filteredAppointments = appointments.filter((apt) => {
     const appointmentDate = new Date(apt.appointment_date);
     const isSameDay =
-      appointmentDate.toDateString() === selectedDate.toDateString();
+      appointmentDate.toDateString() === listDate.toDateString();
     const matchesSearch =
       apt.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       apt.service?.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -455,9 +490,11 @@ function Dashboard({ user }: DashboardProps) {
             >
               <ArrowLeft size={24} />
             </Link>
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500/20 to-yellow-500/10 backdrop-blur-sm flex items-center justify-center border border-yellow-500/20">
-              <Scissors size={24} className="text-yellow-500" />
-            </div>
+            <img
+              src="/img/img2.png"
+              alt="Logo Alyson Barber"
+              className="w-12 h-12 rounded-full object-cover"
+            />
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-yellow-500 logo-text">
                 Painel Administrativo
@@ -465,22 +502,7 @@ function Dashboard({ user }: DashboardProps) {
               <p className="text-gray-400 text-sm">Bem-vindo, {user.email}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
-            <button
-              onClick={() => setShowNewUserModal(true)}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-yellow-500/10 text-yellow-500 rounded-md hover:bg-yellow-500/20 transition-colors"
-            >
-              <UserPlus size={20} />
-              <span className="hidden sm:inline">Novo Usuário</span>
-            </button>
-            <button
-              onClick={handleSignOut}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-red-500/10 text-red-500 rounded-md hover:bg-red-500/20 transition-colors"
-            >
-              <LogOut size={20} />
-              <span className="hidden sm:inline">Sair</span>
-            </button>
-          </div>
+          <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto"></div>
         </header>
 
         {/* Filtros de Período */}
@@ -498,17 +520,9 @@ function Dashboard({ user }: DashboardProps) {
             >
               <ArrowLeft size={20} />
             </button>
-            <Calendar size={20} className="text-yellow-500" />
-            <input
-              type="date"
-              value={format(selectedDate, "yyyy-MM-dd")}
-              onChange={(e) => {
-                const newDate = new Date(e.target.value);
-                setSelectedDate(newDate);
-                setFilter("today");
-              }}
-              className="bg-transparent text-white focus:outline-none focus:border-yellow-500 transition-colors"
-            />
+            <span className="text-white font-medium">
+              {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
+            </span>
             <button
               onClick={() => {
                 const nextDay = new Date(selectedDate);
@@ -532,47 +546,6 @@ function Dashboard({ user }: DashboardProps) {
           >
             Esta Semana
           </button>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setFilter("month");
-                setSelectedMonth(new Date());
-              }}
-              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md transition-colors text-sm sm:text-base ${
-                filter === "month"
-                  ? "bg-yellow-500 text-black"
-                  : "bg-black/30 text-gray-400 hover:bg-black/50"
-              }`}
-            >
-              {filter === "month" ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedMonth(subMonths(selectedMonth, 1));
-                    }}
-                    className="p-1 text-black hover:text-black/80 transition-colors"
-                  >
-                    <ArrowLeft size={20} />
-                  </button>
-                  <span>
-                    {format(selectedMonth, "MMMM yyyy", { locale: ptBR })}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedMonth(subMonths(selectedMonth, -1));
-                    }}
-                    className="p-1 text-black hover:text-black/80 transition-colors rotate-180"
-                  >
-                    <ArrowLeft size={20} />
-                  </button>
-                </div>
-              ) : (
-                "Filtrar por Mês"
-              )}
-            </button>
-          </div>
         </div>
 
         {/* Cards de Estatísticas */}
@@ -582,6 +555,8 @@ function Dashboard({ user }: DashboardProps) {
               <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
                 {filter === "week"
                   ? "Agendamentos da Semana"
+                  : selectedDate.toDateString() === new Date().toDateString()
+                  ? "Agendamentos de Hoje"
                   : `Agendamentos de ${format(selectedDate, "dd/MM/yyyy", {
                       locale: ptBR,
                     })}`}
@@ -599,6 +574,8 @@ function Dashboard({ user }: DashboardProps) {
               <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
                 {filter === "week"
                   ? "Faturamento da Semana"
+                  : selectedDate.toDateString() === new Date().toDateString()
+                  ? "Faturamento de Hoje"
                   : `Faturamento de ${format(selectedDate, "dd/MM/yyyy", {
                       locale: ptBR,
                     })}`}
@@ -616,7 +593,7 @@ function Dashboard({ user }: DashboardProps) {
           <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 rounded-lg p-4 sm:p-6 border border-blue-500/20">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
-                Faturamento Mensal
+                Faturamento de {format(selectedDate, "MMMM", { locale: ptBR })}
               </h3>
               <TrendingUp className="text-blue-500" size={24} />
             </div>
@@ -635,7 +612,7 @@ function Dashboard({ user }: DashboardProps) {
             <h2 className="text-xl font-bold text-yellow-500">
               Estatísticas por Barbeiro
             </h2>
-            <div className="flex items-center gap-2">
+            {/* <div className="flex items-center gap-2">
               <Filter className="text-yellow-500" size={20} />
               <select
                 value={selectedBarberStats}
@@ -649,7 +626,7 @@ function Dashboard({ user }: DashboardProps) {
                   </option>
                 ))}
               </select>
-            </div>
+            </div> */}
           </div>
           <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {Object.entries(stats.barberStats || {})
@@ -666,7 +643,7 @@ function Dashboard({ user }: DashboardProps) {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <img
-                        src={getBarberImageUrl(barberId)}
+                        src="img/img2.png"
                         alt="Barber photo"
                         className="w-12 h-12 rounded-full object-cover"
                       />
@@ -678,24 +655,34 @@ function Dashboard({ user }: DashboardProps) {
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Agendamentos Hoje</span>
+                      <span className="text-gray-400">
+                        {filter === "week"
+                          ? "Agendamentos da Semana"
+                          : selectedDate.toDateString() ===
+                            new Date().toDateString()
+                          ? "Agendamentos Hoje"
+                          : `Agendamentos de ${format(
+                              selectedDate,
+                              "dd/MM/yyyy",
+                              { locale: ptBR }
+                            )}`}
+                      </span>
                       <span className="text-white font-semibold">
                         {barberStat.total}
                       </span>
                     </div>
-                    {/* <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Confirmados</span>
-                      <span className="text-green-500 font-semibold">
-                        {barberStat.confirmed}
-                      </span>
-                    </div> */}
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">
-                        {filter === "today"
+                        {filter === "week"
+                          ? "Faturamento da Semana"
+                          : selectedDate.toDateString() ===
+                            new Date().toDateString()
                           ? "Faturamento Hoje"
-                          : filter === "week"
-                          ? "Faturamento Esta Semana"
-                          : "Faturamento Este Mês"}
+                          : `Faturamento de ${format(
+                              selectedDate,
+                              "dd/MM/yyyy",
+                              { locale: ptBR }
+                            )}`}
                       </span>
                       <span className="text-yellow-500 font-semibold">
                         R$ {barberStat.revenue.toFixed(2)}
@@ -739,7 +726,7 @@ function Dashboard({ user }: DashboardProps) {
         </div>
 
         {/* Filtro de Barbeiro */}
-        <div className="mb-6">
+        {/* <div className="mb-6">
           <div className="flex items-center gap-2">
             <Filter className="text-yellow-500" size={20} />
             <select
@@ -755,7 +742,7 @@ function Dashboard({ user }: DashboardProps) {
               ))}
             </select>
           </div>
-        </div>
+        </div> */}
 
         {/* Filtro de Horários */}
         <div className="mb-6">
@@ -781,29 +768,28 @@ function Dashboard({ user }: DashboardProps) {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-yellow-500">
-              Agendamentos de{" "}
-              {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
+              Agendamentos de {format(listDate, "dd/MM/yyyy", { locale: ptBR })}
             </h2>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 bg-black/30 px-3 py-2 rounded-md border border-white/10">
                 <button
                   onClick={() => {
-                    const previousDay = new Date(selectedDate);
+                    const previousDay = new Date(listDate);
                     previousDay.setDate(previousDay.getDate() - 1);
-                    setSelectedDate(previousDay);
+                    setListDate(previousDay);
                   }}
                   className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors"
                 >
                   <ArrowLeft size={20} />
                 </button>
                 <span className="text-white font-medium">
-                  {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
+                  {format(listDate, "dd/MM/yyyy", { locale: ptBR })}
                 </span>
                 <button
                   onClick={() => {
-                    const nextDay = new Date(selectedDate);
+                    const nextDay = new Date(listDate);
                     nextDay.setDate(nextDay.getDate() + 1);
-                    setSelectedDate(nextDay);
+                    setListDate(nextDay);
                   }}
                   className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors rotate-180"
                 >
@@ -817,7 +803,7 @@ function Dashboard({ user }: DashboardProps) {
             {appointmentFilter !== "booked" && (
               <div className="flex-shrink-0 w-20 mr-4">
                 <div className="bg-black/50 rounded-t-md py-3 text-center font-semibold text-yellow-500">
-                  Horário
+                  Horários
                 </div>
                 <div className="bg-black/30 rounded-b-md p-2 space-y-0 min-h-[3300px]">
                   {Array.from({ length: 11 }, (_, i) => i + 8).map((hour) => (
@@ -862,7 +848,7 @@ function Dashboard({ user }: DashboardProps) {
                 >
                   <div className="bg-black/50 rounded-t-md py-3 text-center font-semibold text-yellow-500 flex items-center justify-center gap-2">
                     <img
-                      src={getBarberImageUrl(barber.id)}
+                      src="img/img2.png"
                       alt={`${barber.name}'s photo`}
                       className="w-8 h-8 rounded-full object-cover"
                     />

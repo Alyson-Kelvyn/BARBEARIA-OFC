@@ -1,13 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  Calendar,
-  Scissors,
-  User,
-  LogIn,
-  X,
-  Phone,
-  Search,
-} from "lucide-react";
+import { Calendar, Scissors, User, X, Phone, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -472,13 +464,17 @@ function Booking() {
 
       if (error) throw error;
 
+      // Atualiza a lista de agendamentos do cliente
       setClientAppointments((prev) =>
         prev.filter((apt) => apt.id !== appointmentId)
       );
+
+      // Atualiza a lista geral de agendamentos
       await fetchAppointments();
+
       alert("Agendamento cancelado com sucesso!");
     } catch (error) {
-      console.error("Error canceling appointment:", error);
+      console.error("Erro ao cancelar agendamento:", error);
       alert("Erro ao cancelar agendamento. Por favor, tente novamente.");
     } finally {
       setLoading(false);
@@ -723,7 +719,7 @@ function Booking() {
                     to="/login"
                     className="flex-1 p-3 bg-black/50 border border-white/10 rounded-md text-white hover:bg-black/70 transition-colors flex items-center justify-center gap-2"
                   >
-                    <LogIn size={20} />
+                    <User size={20} />
                     <span className="text-sm md:text-base">
                       Área do Barbeiro
                     </span>
