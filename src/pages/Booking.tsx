@@ -780,7 +780,8 @@ function Booking() {
                     !clientName ||
                     !selectedService ||
                     !selectedDate ||
-                    !selectedBarber
+                    !selectedBarber ||
+                    !clientPhone
                   }
                   className="w-full bg-yellow-500 text-black py-3 rounded-md hover:bg-yellow-400 disabled:bg-gray-300 disabled:text-black-900 disabled:cursor-not-allowed transition-colors font-semibold mt-6"
                 >

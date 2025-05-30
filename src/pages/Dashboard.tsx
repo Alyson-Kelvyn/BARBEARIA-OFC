@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   format,
   startOfDay,
@@ -13,14 +13,18 @@ import {
   Scissors,
   Calendar,
   Clock,
-  ArrowLeft,
   X,
   Phone,
   Search,
-  Filter,
   TrendingUp,
   DollarSign,
   Calendar as CalendarIcon,
+  Menu,
+  List,
+  BarChart2,
+  FileText,
+  LogOut,
+  ChevronLeft,
 } from "lucide-react";
 import { supabase } from "../supabase";
 
@@ -67,22 +71,6 @@ interface BarberData {
   name: string;
 }
 
-interface AppointmentWithRelations extends Appointment {
-  service: Service | null;
-  barber: BarberData | null;
-}
-
-interface SupabaseResponse<T> {
-  data: T | null;
-  error: {
-    message: string;
-    details?: string;
-    hint?: string;
-    code?: string;
-  } | null;
-}
-
-// Interface para as estatísticas do painel
 interface Stats {
   total: number;
   confirmed: number;
@@ -108,6 +96,25 @@ interface Period {
   start: Date;
   end: Date;
 }
+
+// Adicionar tipos para os dados do Supabase
+type SupabaseAppointment = {
+  id: string;
+  client_name: string;
+  client_phone: string;
+  appointment_date: string;
+  status: "pending" | "confirmed" | "cancelled";
+  service: {
+    id: string;
+    name: string;
+    price: number;
+    duration: number;
+  } | null;
+  barber: {
+    id: string;
+    name: string;
+  } | null;
+};
 
 // Componente do painel administrativo
 // Gerencia a visualização e controle de agendamentos
@@ -140,6 +147,10 @@ function Dashboard({ user }: DashboardProps) {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [listDate, setListDate] = useState(new Date());
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [activeSection, setActiveSection] = useState<
+    "agendamentos" | "estatisticas" | "relatorio"
+  >("agendamentos");
 
   // Função para obter o período baseado no filtro
   const getPeriod = (filter: "all" | "today" | "week"): Period => {
@@ -169,8 +180,10 @@ function Dashboard({ user }: DashboardProps) {
   }, []);
 
   useEffect(() => {
-    fetchAppointments();
-  }, [selectedDate, selectedBarber, filter]);
+    if (activeSection === "estatisticas" || activeSection === "relatorio") {
+      fetchAppointments();
+    }
+  }, [activeSection, selectedDate, filter]);
 
   useEffect(() => {
     fetchListAppointments();
@@ -213,13 +226,8 @@ function Dashboard({ user }: DashboardProps) {
         endDate.setHours(23, 59, 59, 999);
       }
 
-      console.log("Buscando agendamentos para estatísticas:", {
-        startDate,
-        endDate,
-      });
-
       // Buscar agendamentos para estatísticas
-      const { data: statsData, error: statsError } = (await supabase
+      const { data: statsData, error: statsError } = await supabase
         .from("appointments")
         .select(
           `
@@ -235,9 +243,7 @@ function Dashboard({ user }: DashboardProps) {
         .is("deleted_at", null)
         .gte("appointment_date", startDate.toISOString())
         .lte("appointment_date", endDate.toISOString())
-        .order("appointment_date", { ascending: true })) as SupabaseResponse<
-        AppointmentWithRelations[]
-      >;
+        .order("appointment_date", { ascending: true });
 
       if (statsError) {
         console.error("Erro ao buscar estatísticas:", statsError.message);
@@ -310,11 +316,11 @@ function Dashboard({ user }: DashboardProps) {
 
       stats.barberStats = barberStats;
 
-      // Buscar estatísticas mensais do mês selecionado
+      // Buscar estatísticas mensais
       const monthStart = startOfMonth(selectedDate);
       const monthEnd = endOfMonth(selectedDate);
 
-      const { data: monthlyData, error: monthlyError } = (await supabase
+      const { data: monthlyData, error: monthlyError } = await supabase
         .from("appointments")
         .select(
           `
@@ -327,9 +333,7 @@ function Dashboard({ user }: DashboardProps) {
         .is("deleted_at", null)
         .gte("appointment_date", monthStart.toISOString())
         .lte("appointment_date", monthEnd.toISOString())
-        .eq("status", "confirmed")) as SupabaseResponse<
-        AppointmentWithRelations[]
-      >;
+        .eq("status", "confirmed");
 
       if (monthlyError) {
         console.error(
@@ -524,17 +528,84 @@ function Dashboard({ user }: DashboardProps) {
 
   return (
     <div className="min-h-screen app-background text-white">
-      <div className="max-w-7xl mx-auto p-4">
-        {/* Header */}
-        <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-4">
-            <Link
-              to="/"
-              className="p-2 -ml-2 text-gray-400 hover:text-yellow-500 transition-colors"
-              title="Voltar"
+      {/* Menu Lateral */}
+      <div
+        className={`fixed inset-y-0 left-0 w-64 bg-black/90 transform ${
+          showSidebar ? "translate-x-0" : "-translate-x-full"
+        } transition-transform duration-300 ease-in-out z-50 border-r border-white/10`}
+      >
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-8">
+            <img
+              src="/img/img2.png"
+              alt="Logo Alyson Barber"
+              className="w-12 h-12 rounded-full object-cover"
+            />
+            <button
+              onClick={() => setShowSidebar(false)}
+              className="text-gray-400 hover:text-white transition-colors"
             >
-              <ArrowLeft size={24} />
-            </Link>
+              <X size={24} />
+            </button>
+          </div>
+          <nav className="space-y-2">
+            <button
+              onClick={() => {
+                setActiveSection("agendamentos");
+                setShowSidebar(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                activeSection === "agendamentos"
+                  ? "bg-yellow-500 text-black"
+                  : "text-gray-400 hover:bg-white/10"
+              }`}
+            >
+              <List size={20} />
+              <span>Agendamentos</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveSection("estatisticas");
+                setShowSidebar(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                activeSection === "estatisticas"
+                  ? "bg-yellow-500 text-black"
+                  : "text-gray-400 hover:bg-white/10"
+              }`}
+            >
+              <BarChart2 size={20} />
+              <span>Estatísticas</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveSection("relatorio");
+                setShowSidebar(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                activeSection === "relatorio"
+                  ? "bg-yellow-500 text-black"
+                  : "text-gray-400 hover:bg-white/10"
+              }`}
+            >
+              <FileText size={20} />
+              <span>Relatório</span>
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      <div className="w-full h-full p-4">
+        {/* Header */}
+        <header className="flex items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowSidebar(true)}
+              className="p-2 -ml-2 text-gray-400 hover:text-yellow-500 transition-colors"
+              title="Menu"
+            >
+              <Menu size={24} />
+            </button>
             <img
               src="/img/img2.png"
               alt="Logo Alyson Barber"
@@ -547,551 +618,593 @@ function Dashboard({ user }: DashboardProps) {
               <p className="text-gray-400 text-sm">Bem-vindo, {user.email}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto"></div>
+          <button
+            onClick={handleSignOut}
+            className="p-2 text-gray-400 hover:text-yellow-500 transition-colors flex items-center gap-2"
+            title="Sair"
+          >
+            <LogOut size={24} />
+            <span className="hidden sm:inline">Sair</span>
+          </button>
         </header>
 
-        {/* Filtros de Período */}
-        <div className="flex gap-2 sm:gap-4 mb-6 overflow-x-auto pb-2">
-          <div className="flex items-center gap-2 bg-black/30 px-3 py-2 rounded-md border border-white/10">
-            <button
-              onClick={() => {
-                const previousDay = new Date(selectedDate);
-                previousDay.setDate(previousDay.getDate() - 1);
-                setSelectedDate(previousDay);
-                setFilter("today");
-              }}
-              className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors"
-              title="Dia anterior"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <span className="text-white font-medium">
-              {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
-            </span>
-            <button
-              onClick={() => {
-                const nextDay = new Date(selectedDate);
-                nextDay.setDate(nextDay.getDate() + 1);
-                setSelectedDate(nextDay);
-                setFilter("today");
-              }}
-              className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors rotate-180"
-              title="Próximo dia"
-            >
-              <ArrowLeft size={20} />
-            </button>
-          </div>
-          <button
-            onClick={() => setFilter("week")}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md transition-colors text-sm sm:text-base ${
-              filter === "week"
-                ? "bg-yellow-500 text-black"
-                : "bg-black/30 text-gray-400 hover:bg-black/50"
-            }`}
-          >
-            Esta Semana
-          </button>
-        </div>
-
-        {/* Cards de Estatísticas */}
-        <div className="grid gap-4 sm:gap-6 mb-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="bg-gradient-to-br from-yellow-500/10 to-yellow-500/5 rounded-lg p-4 sm:p-6 border border-yellow-500/20">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
-                {filter === "week"
-                  ? "Agendamentos da Semana"
-                  : selectedDate.toDateString() === new Date().toDateString()
-                  ? "Agendamentos de Hoje"
-                  : `Agendamentos de ${format(selectedDate, "dd/MM/yyyy", {
-                      locale: ptBR,
-                    })}`}
-              </h3>
-              <CalendarIcon className="text-yellow-500" size={24} />
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold mb-2">{stats.total}</p>
-            <p className="text-sm text-gray-200">
-              {stats.confirmed} confirmados
-            </p>
-          </div>
-
-          <div className="bg-gradient-to-br from-green-500/10 to-green-500/5 rounded-lg p-4 sm:p-6 border border-green-500/20">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
-                {filter === "week"
-                  ? "Faturamento da Semana"
-                  : selectedDate.toDateString() === new Date().toDateString()
-                  ? "Faturamento de Hoje"
-                  : `Faturamento de ${format(selectedDate, "dd/MM/yyyy", {
-                      locale: ptBR,
-                    })}`}
-              </h3>
-              <DollarSign className="text-green-500" size={24} />
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold mb-2">
-              R$ {stats.revenue.toFixed(2)}
-            </p>
-            <p className="text-sm text-gray-200">
-              {stats.confirmed} agendamentos
-            </p>
-          </div>
-
-          <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 rounded-lg p-4 sm:p-6 border border-blue-500/20">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
-                Faturamento de {format(selectedDate, "MMMM", { locale: ptBR })}
-              </h3>
-              <TrendingUp className="text-blue-500" size={24} />
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold mb-2">
-              R$ {stats.monthlyRevenue.toFixed(2)}
-            </p>
-            <p className="text-sm text-gray-200">
-              {stats.monthlyAppointments} agendamentos
-            </p>
-          </div>
-        </div>
-
-        {/* Estatísticas por Barbeiro */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-yellow-500">
-              Estatísticas por Barbeiro
-            </h2>
-            {/* <div className="flex items-center gap-2">
-              <Filter className="text-yellow-500" size={20} />
-              <select
-                value={selectedBarberStats}
-                onChange={(e) => setSelectedBarberStats(e.target.value)}
-                className="px-4 py-2 bg-black/30 border border-white/10 rounded-lg text-white focus:outline-none focus:border-yellow-500 transition-colors"
-              >
-                <option value="all">Todos os Barbeiros</option>
-                {barbers.map((barber) => (
-                  <option key={barber.id} value={barber.id}>
-                    {barber.name}
-                  </option>
-                ))}
-              </select>
-            </div> */}
-          </div>
-          <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            {Object.entries(stats.barberStats || {})
-              .filter(
-                ([barberId]) =>
-                  selectedBarberStats === "all" ||
-                  barberId === selectedBarberStats
-              )
-              .map(([barberId, barberStat]) => (
-                <div
-                  key={barberId}
-                  className="bg-black/30 rounded-lg p-4 sm:p-6 border border-white/10"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <img
-                        src="img/img2.png"
-                        alt="Barber photo"
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                      <h3 className="text-lg font-semibold text-yellow-500">
-                        {barberStat.name}
-                      </h3>
-                    </div>
-                    {/* <User className="text-yellow-500" size={24} /> */}
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">
-                        {filter === "week"
-                          ? "Agendamentos da Semana"
-                          : selectedDate.toDateString() ===
-                            new Date().toDateString()
-                          ? "Agendamentos Hoje"
-                          : `Agendamentos de ${format(
-                              selectedDate,
-                              "dd/MM/yyyy",
-                              { locale: ptBR }
-                            )}`}
-                      </span>
-                      <span className="text-white font-semibold">
-                        {barberStat.total}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">
-                        {filter === "week"
-                          ? "Faturamento da Semana"
-                          : selectedDate.toDateString() ===
-                            new Date().toDateString()
-                          ? "Faturamento Hoje"
-                          : `Faturamento de ${format(
-                              selectedDate,
-                              "dd/MM/yyyy",
-                              { locale: ptBR }
-                            )}`}
-                      </span>
-                      <span className="text-yellow-500 font-semibold">
-                        R$ {barberStat.revenue.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">
-                        Agendamentos Mensais
-                      </span>
-                      <span className="text-white font-semibold">
-                        {barberStat.monthlyAppointments}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Faturamento Mensal</span>
-                      <span className="text-blue-500 font-semibold">
-                        R$ {barberStat.monthlyRevenue.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-
-        {/* Barra de Pesquisa */}
-        <div className="mb-6">
-          <div className="relative">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nome do cliente ou serviço..."
-              className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
-            />
-            <Search
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"
-              size={20}
-            />
-          </div>
-        </div>
-
-        {/* Filtro de Barbeiro */}
-        {/* <div className="mb-6">
-          <div className="flex items-center gap-2">
-            <Filter className="text-yellow-500" size={20} />
-            <select
-              value={selectedBarber}
-              onChange={(e) => setSelectedBarber(e.target.value)}
-              className="px-4 py-3 bg-black/30 border border-white/10 rounded-lg text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
-            >
-              <option value="all">Todos os Barbeiros</option>
-              {barbers.map((barber) => (
-                <option key={barber.id} value={barber.id}>
-                  {barber.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div> */}
-
-        {/* Filtro de Horários */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2">
-            <Filter className="text-yellow-500" size={20} />
-            <select
-              value={appointmentFilter}
-              onChange={(e) =>
-                setAppointmentFilter(
-                  e.target.value as "all" | "booked" | "empty"
-                )
-              }
-              className="px-4 py-3 bg-black/30 border border-white/10 rounded-lg text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
-            >
-              <option value="all">Todos os Horários</option>
-              <option value="booked">Apenas Agendados</option>
-              <option value="empty">Apenas Vazios</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Lista de Agendamentos Agrupados por Barbeiro */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-yellow-500">
-              Agendamentos de {format(listDate, "dd/MM/yyyy", { locale: ptBR })}
-            </h2>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 bg-black/30 px-3 py-2 rounded-md border border-white/10">
-                <button
-                  onClick={() => {
-                    const previousDay = new Date(listDate);
-                    previousDay.setDate(previousDay.getDate() - 1);
-                    setListDate(previousDay);
-                  }}
-                  className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors"
-                >
-                  <ArrowLeft size={20} />
-                </button>
-                <span className="text-white font-medium">
-                  {format(listDate, "dd/MM/yyyy", { locale: ptBR })}
-                </span>
-                <button
-                  onClick={() => {
-                    const nextDay = new Date(listDate);
-                    nextDay.setDate(nextDay.getDate() + 1);
-                    setListDate(nextDay);
-                  }}
-                  className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors rotate-180"
-                >
-                  <ArrowLeft size={20} />
-                </button>
+        {/* Conteúdo baseado na seção ativa */}
+        {activeSection === "agendamentos" && (
+          <>
+            {/* Barra de Pesquisa e Filtros */}
+            <div className="mb-6 space-y-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar por nome do cliente ou serviço..."
+                  className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
+                />
+                <Search
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={20}
+                />
               </div>
-            </div>
-          </div>
-          <div className="flex overflow-x-auto pb-4 -mx-4 px-4">
-            {/* Coluna de Horários */}
-            {appointmentFilter !== "booked" && (
-              <div className="flex-shrink-0 w-20 mr-4">
-                <div className="bg-black/50 rounded-t-md py-3 text-center font-semibold text-yellow-500">
-                  Horários
-                </div>
-                <div className="bg-black/30 rounded-b-md p-2 space-y-0 min-h-[4500px]">
-                  {Array.from({ length: 13 }, (_, i) => i + 8).map((hour) => (
-                    <div
-                      key={hour}
-                      className="h-[500px] border-b border-white/100 relative"
-                    >
-                      <div className="text-center text-gray-400 text-sm h-[250px] flex items-center justify-center border-b border-white/100">
-                        {`${hour.toString().padStart(2, "0")}:00`}
-                      </div>
-                      <div className="text-center text-gray-400 text-sm h-[250px] flex items-center justify-center">
-                        {`${hour.toString().padStart(2, "0")}:30`}
-                      </div>
-                      <div className="absolute right-0 top-0 bottom-0 w-[1px] bg-white/100"></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {barbers.map((barber) => {
-              const barberAppointments = filteredAppointments.filter(
-                (apt) => apt.barber?.id === barber.id
-              );
-
-              if (
-                barberAppointments.length === 0 &&
-                selectedBarber !== barber.id &&
-                selectedBarber !== "all"
-              ) {
-                return null;
-              }
-
-              return (
-                <div
-                  key={barber.id}
-                  className={`flex-shrink-0 ${
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setAppointmentFilter("all")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    appointmentFilter === "all"
+                      ? "bg-yellow-500 text-black"
+                      : "bg-black/30 text-gray-400 hover:bg-black/50"
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  onClick={() => setAppointmentFilter("booked")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     appointmentFilter === "booked"
-                      ? "w-80 sm:w-96 lg:w-[500px]"
-                      : "w-64 sm:w-72 lg:w-80"
-                  } mr-4`}
+                      ? "bg-yellow-500 text-black"
+                      : "bg-black/30 text-gray-400 hover:bg-black/50"
+                  }`}
                 >
-                  <div className="bg-black/50 rounded-t-md py-3 text-center font-semibold text-yellow-500 flex items-center justify-center gap-2">
-                    <img
-                      src="img/img2.png"
-                      alt={`${barber.name}'s photo`}
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
-                    <span>{barber.name}</span>
-                  </div>
-                  <div className="bg-black/30 rounded-b-md p-4 space-y-0 min-h-[4500px] relative">
-                    {/* Grade de horários de fundo */}
-                    {appointmentFilter !== "booked" &&
-                      Array.from({ length: 13 }, (_, i) => i + 8).map(
+                  Apenas Horarios Agendados
+                </button>
+              </div>
+            </div>
+
+            {/* Lista de Agendamentos */}
+            <div className="mb-8">
+              <div className="flex flex-col items-center mb-4">
+                <h2 className="text-xl font-bold text-yellow-500 mb-4">
+                  Agendamentos de{" "}
+                  {format(listDate, "dd/MM/yyyy", { locale: ptBR })}
+                </h2>
+                <div className="flex items-center gap-2 bg-black/30 px-7 py-3 rounded-md border border-white/10">
+                  <button
+                    onClick={() => {
+                      const previousDay = new Date(listDate);
+                      previousDay.setDate(previousDay.getDate() - 1);
+                      setListDate(previousDay);
+                    }}
+                    className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors"
+                  >
+                    <ChevronLeft size={30} />
+                  </button>
+                  <span className="text-white font-medium">
+                    {format(listDate, "dd/MM/yyyy", { locale: ptBR })}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const nextDay = new Date(listDate);
+                      nextDay.setDate(nextDay.getDate() + 1);
+                      setListDate(nextDay);
+                    }}
+                    className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors rotate-180"
+                  >
+                    <ChevronLeft size={30} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex overflow-x-auto pb-4 -mx-4 px-4">
+                {/* Coluna de Horários */}
+                {appointmentFilter !== "booked" && (
+                  <div className="flex-shrink-0 w-20 mr-4">
+                    <div className="bg-black/50 rounded-t-md py-3 text-center font-semibold text-yellow-500">
+                      Horários
+                    </div>
+                    <div className="bg-black/30 rounded-b-md p-2 space-y-0 min-h-[4500px]">
+                      {Array.from({ length: 13 }, (_, i) => i + 8).map(
                         (hour) => (
                           <div
                             key={hour}
-                            className="h-[500px] border-b border-white/10"
+                            className="h-[500px] border-b border-white/100 relative"
                           >
-                            <div className="h-[246px] border-b border-white/10"></div>
-                            <div className="h-[246px]"></div>
+                            <div className="text-center text-gray-400 text-sm h-[250px] flex items-center justify-center border-b border-white/100">
+                              {`${hour.toString().padStart(2, "0")}:00`}
+                            </div>
+                            <div className="text-center text-gray-400 text-sm h-[250px] flex items-center justify-center">
+                              {`${hour.toString().padStart(2, "0")}:30`}
+                            </div>
+                            <div className="absolute right-0 top-0 bottom-0 w-[1px] bg-white/100"></div>
                           </div>
                         )
                       )}
-
-                    {/* Agendamentos existentes */}
-                    {barberAppointments
-                      .sort(
-                        (a, b) =>
-                          new Date(a.appointment_date).getTime() -
-                          new Date(b.appointment_date).getTime()
-                      )
-                      .map((appointment) => {
-                        const appointmentHour = new Date(
-                          appointment.appointment_date
-                        ).getHours();
-                        const appointmentMinute = new Date(
-                          appointment.appointment_date
-                        ).getMinutes();
-                        const topPosition =
-                          appointmentFilter === "booked"
-                            ? barberAppointments.indexOf(appointment) * 250 + 16
-                            : (appointmentHour - 8) * 500 +
-                              (appointmentMinute >= 30 ? 250 : 0) +
-                              16;
-
-                        // Calcular a altura do card baseado na duração do serviço e no filtro
-                        const serviceDuration =
-                          appointment.service?.duration || 30;
-                        const cardHeight =
-                          appointmentFilter === "booked"
-                            ? 230 // Altura fixa para o modo "apenas agendados"
-                            : serviceDuration >= 75
-                            ? 720 // 750px para 1:30 (75+ minutos)
-                            : serviceDuration >= 40
-                            ? 470 // 500px para 1 hora (40-74 minutos)
-                            : 230; // 230px para 30 minutos
-
-                        if (appointmentFilter === "empty") return null;
-
-                        return (
-                          <div
-                            key={appointment.id}
-                            className={`absolute left-0 right-0 p-2 rounded-md border flex flex-col justify-between ${getStatusColor(
-                              appointment.status || "pending"
-                            )}`}
-                            style={{
-                              top: `${topPosition}px`,
-                              height: `${cardHeight}px`,
-                              margin: "8px",
-                            }}
-                          >
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center gap-1 text-yellow-500 font-bold text-xl">
-                                <Clock size={20} />
-                                <span>
-                                  {format(
-                                    new Date(appointment.appointment_date),
-                                    "HH:mm"
-                                  )}
-                                </span>
-                              </div>
-                              <span
-                                className={`text-base font-medium px-3 py-1.5 rounded ${
-                                  appointment.status === "confirmed"
-                                    ? "bg-green-500/10 text-green-400"
-                                    : appointment.status === "cancelled"
-                                    ? "bg-red-500/10 text-red-400"
-                                    : "bg-yellow-500/10 text-yellow-400"
-                                }`}
-                              >
-                                {appointment.status === "confirmed"
-                                  ? "Confirmado"
-                                  : appointment.status === "cancelled"
-                                  ? "Cancelado"
-                                  : "Pendente"}
-                              </span>
-                            </div>
-                            <div className="text-gray-300 flex flex-col gap-1 flex-1">
-                              <div className="flex flex-col gap-2">
-                                <h4 className="font-semibold text-white text-xl">
-                                  {appointment.client_name}
-                                </h4>
-                                <div className="flex items-center gap-1 text-gray-400">
-                                  <Phone size={20} />
-                                  <span className="text-lg">
-                                    {appointment.client_phone}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-2">
-                                <div className="flex items-center gap-1">
-                                  <Scissors size={20} />
-                                  <span className="text-lg">
-                                    {appointment.service?.name}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1 text-yellow-500 font-semibold">
-                                  <span className="text-lg">
-                                    R$ {appointment.service?.price.toFixed(2)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                    {/* Cards de "Nenhum agendamento" para todos os intervalos */}
-                    {Array.from({ length: 26 }, (_, i) => {
-                      const hour = Math.floor(i / 2) + 8;
-                      const isHalfHour = i % 2 === 1;
-                      const hasAppointment = barberAppointments.some((apt) => {
-                        const aptHour = new Date(
-                          apt.appointment_date
-                        ).getHours();
-                        const aptMinute = new Date(
-                          apt.appointment_date
-                        ).getMinutes();
-                        const serviceDuration = apt.service?.duration || 30;
-
-                        // Verifica se o slot atual está dentro do intervalo do agendamento
-                        if (serviceDuration >= 75) {
-                          // Para serviços de 75+ minutos, ocupa 1:30
-                          const aptStartTime = aptHour * 60 + aptMinute;
-                          const currentSlotTime =
-                            hour * 60 + (isHalfHour ? 30 : 0);
-                          return (
-                            currentSlotTime >= aptStartTime &&
-                            currentSlotTime < aptStartTime + 90 // 90 minutos = 1:30
-                          );
-                        } else if (serviceDuration >= 40) {
-                          // Para serviços de 40-74 minutos, ocupa 1 hora
-                          const aptStartTime = aptHour * 60 + aptMinute;
-                          const currentSlotTime =
-                            hour * 60 + (isHalfHour ? 30 : 0);
-                          return (
-                            currentSlotTime >= aptStartTime &&
-                            currentSlotTime < aptStartTime + 60 // 60 minutos = 1 hora
-                          );
-                        }
-
-                        // Para serviços de 30 minutos, verifica apenas o slot exato
-                        return (
-                          aptHour === hour &&
-                          ((isHalfHour && aptMinute >= 30) ||
-                            (!isHalfHour && aptMinute < 30))
-                        );
-                      });
-
-                      if (hasAppointment && appointmentFilter === "empty")
-                        return null;
-                      if (!hasAppointment && appointmentFilter === "booked")
-                        return null;
-
-                      if (hasAppointment) return null;
-
-                      return (
-                        <div
-                          key={`${hour}-${isHalfHour ? "30" : "00"}`}
-                          className="absolute left-0 right-0 p-2 rounded-md border bg-blue-500/10 text-blue-500 border-yellow-500/20 h-[230px] flex items-center justify-center"
-                          style={{
-                            top: `${
-                              (hour - 8) * 500 + (isHalfHour ? 250 : 0) + 16
-                            }px`,
-                            margin: "8px",
-                          }}
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <Calendar size={30} />
-                            <span className="text-xl font-medium">
-                              Nenhum agendamento
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                )}
+
+                {barbers.map((barber) => {
+                  const barberAppointments = filteredAppointments.filter(
+                    (apt) => apt.barber?.id === barber.id
+                  );
+
+                  if (
+                    barberAppointments.length === 0 &&
+                    selectedBarber !== barber.id &&
+                    selectedBarber !== "all"
+                  ) {
+                    return null;
+                  }
+
+                  // Calcular a altura total necessária para os cards
+                  const totalHeight =
+                    appointmentFilter === "booked"
+                      ? barberAppointments.length * 250 + 32 // 250px por card + 32px de margem
+                      : 4500; // Altura fixa para o modo normal
+
+                  return (
+                    <div
+                      key={barber.id}
+                      className={`flex-shrink-0 ${
+                        appointmentFilter === "booked"
+                          ? "w-80 sm:w-96 lg:w-[500px] mx-auto"
+                          : "w-64 sm:w-72 lg:w-80 mr-4"
+                      }`}
+                    >
+                      <div className="bg-black/50 rounded-t-md py-3 text-center font-semibold text-yellow-500 flex items-center justify-center gap-2">
+                        <img
+                          src="img/img2.png"
+                          alt={`${barber.name}'s photo`}
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                        <span>{barber.name}</span>
+                      </div>
+                      <div
+                        className="bg-black/30 rounded-b-md p-4 space-y-0 relative"
+                        style={{ height: `${totalHeight}px` }}
+                      >
+                        {/* Grade de horários de fundo */}
+                        {appointmentFilter !== "booked" &&
+                          Array.from({ length: 13 }, (_, i) => i + 8).map(
+                            (hour) => (
+                              <div
+                                key={hour}
+                                className="h-[500px] border-b border-white/10"
+                              >
+                                <div className="h-[246px] border-b border-white/10"></div>
+                                <div className="h-[246px]"></div>
+                              </div>
+                            )
+                          )}
+
+                        {/* Agendamentos existentes */}
+                        {barberAppointments
+                          .sort(
+                            (a, b) =>
+                              new Date(a.appointment_date).getTime() -
+                              new Date(b.appointment_date).getTime()
+                          )
+                          .map((appointment) => {
+                            const appointmentHour = new Date(
+                              appointment.appointment_date
+                            ).getHours();
+                            const appointmentMinute = new Date(
+                              appointment.appointment_date
+                            ).getMinutes();
+                            const topPosition =
+                              appointmentFilter === "booked"
+                                ? barberAppointments.indexOf(appointment) *
+                                    250 +
+                                  16
+                                : (appointmentHour - 8) * 500 +
+                                  (appointmentMinute >= 30 ? 250 : 0) +
+                                  16;
+
+                            // Calcular a altura do card baseado na duração do serviço e no filtro
+                            const serviceDuration =
+                              appointment.service?.duration || 30;
+                            const cardHeight =
+                              appointmentFilter === "booked"
+                                ? 230 // Altura fixa para o modo "apenas agendados"
+                                : serviceDuration >= 75
+                                ? 720 // 750px para 1:30 (75+ minutos)
+                                : serviceDuration >= 40
+                                ? 470 // 500px para 1 hora (40-74 minutos)
+                                : 230; // 230px para 30 minutos
+
+                            if (appointmentFilter === "empty") return null;
+
+                            return (
+                              <div
+                                key={appointment.id}
+                                className={`absolute left-0 right-0 p-2 rounded-md border flex flex-col justify-between ${getStatusColor(
+                                  appointment.status || "pending"
+                                )}`}
+                                style={{
+                                  top: `${topPosition}px`,
+                                  height: `${cardHeight}px`,
+                                  margin: "8px",
+                                }}
+                              >
+                                <div className="flex justify-between items-center">
+                                  <div className="flex items-center gap-1 text-yellow-500 font-bold text-xl">
+                                    <Clock size={20} />
+                                    <span>
+                                      {format(
+                                        new Date(appointment.appointment_date),
+                                        "HH:mm"
+                                      )}
+                                    </span>
+                                  </div>
+                                  <span
+                                    className={`text-base font-medium px-3 py-1.5 rounded ${
+                                      appointment.status === "confirmed"
+                                        ? "bg-green-500/10 text-green-400"
+                                        : appointment.status === "cancelled"
+                                        ? "bg-red-500/10 text-red-400"
+                                        : "bg-yellow-500/10 text-yellow-400"
+                                    }`}
+                                  >
+                                    {appointment.status === "confirmed"
+                                      ? "Confirmado"
+                                      : appointment.status === "cancelled"
+                                      ? "Cancelado"
+                                      : "Pendente"}
+                                  </span>
+                                </div>
+                                <div className="text-gray-300 flex flex-col gap-1 flex-1">
+                                  <div className="flex flex-col gap-2">
+                                    <h4 className="font-semibold text-white text-xl">
+                                      {appointment.client_name}
+                                    </h4>
+                                    <div className="flex items-center gap-1 text-gray-400">
+                                      <Phone size={20} />
+                                      <span className="text-lg">
+                                        {appointment.client_phone}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col gap-2">
+                                    <div className="flex items-center gap-1">
+                                      <Scissors size={20} />
+                                      <span className="text-lg">
+                                        {appointment.service?.name}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-yellow-500 font-semibold">
+                                      <span className="text-lg">
+                                        R${" "}
+                                        {appointment.service?.price.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                        {/* Cards de "Nenhum agendamento" para todos os intervalos */}
+                        {appointmentFilter !== "booked" &&
+                          Array.from({ length: 26 }, (_, i) => {
+                            const hour = Math.floor(i / 2) + 8;
+                            const isHalfHour = i % 2 === 1;
+                            const hasAppointment = barberAppointments.some(
+                              (apt) => {
+                                const aptHour = new Date(
+                                  apt.appointment_date
+                                ).getHours();
+                                const aptMinute = new Date(
+                                  apt.appointment_date
+                                ).getMinutes();
+                                const serviceDuration =
+                                  apt.service?.duration || 30;
+
+                                // Verifica se o slot atual está dentro do intervalo do agendamento
+                                if (serviceDuration >= 75) {
+                                  // Para serviços de 75+ minutos, ocupa 1:30
+                                  const aptStartTime = aptHour * 60 + aptMinute;
+                                  const currentSlotTime =
+                                    hour * 60 + (isHalfHour ? 30 : 0);
+                                  return (
+                                    currentSlotTime >= aptStartTime &&
+                                    currentSlotTime < aptStartTime + 90 // 90 minutos = 1:30
+                                  );
+                                } else if (serviceDuration >= 40) {
+                                  // Para serviços de 40-74 minutos, ocupa 1 hora
+                                  const aptStartTime = aptHour * 60 + aptMinute;
+                                  const currentSlotTime =
+                                    hour * 60 + (isHalfHour ? 30 : 0);
+                                  return (
+                                    currentSlotTime >= aptStartTime &&
+                                    currentSlotTime < aptStartTime + 60 // 60 minutos = 1 hora
+                                  );
+                                }
+
+                                // Para serviços de 30 minutos, verifica apenas o slot exato
+                                return (
+                                  aptHour === hour &&
+                                  ((isHalfHour && aptMinute >= 30) ||
+                                    (!isHalfHour && aptMinute < 30))
+                                );
+                              }
+                            );
+
+                            if (hasAppointment && appointmentFilter === "empty")
+                              return null;
+                            if (
+                              !hasAppointment &&
+                              appointmentFilter === "booked"
+                            )
+                              return null;
+
+                            if (hasAppointment) return null;
+
+                            return (
+                              <div
+                                key={`${hour}-${isHalfHour ? "30" : "00"}`}
+                                className="absolute left-0 right-0 p-2 rounded-md border bg-blue-500/10 text-blue-500 border-yellow-500/20 h-[230px] flex items-center justify-center"
+                                style={{
+                                  top: `${
+                                    (hour - 8) * 500 +
+                                    (isHalfHour ? 250 : 0) +
+                                    16
+                                  }px`,
+                                  margin: "8px",
+                                }}
+                              >
+                                <div className="flex items-center justify-center gap-2">
+                                  <Calendar size={30} />
+                                  <span className="text-xl font-medium">
+                                    Nenhum agendamento
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeSection === "estatisticas" && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-yellow-500">
+                Estatísticas por Barbeiro
+              </h2>
+            </div>
+            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {Object.entries(stats.barberStats || {})
+                .filter(
+                  ([barberId]) =>
+                    selectedBarberStats === "all" ||
+                    barberId === selectedBarberStats
+                )
+                .map(([barberId, barberStat]) => (
+                  <div
+                    key={barberId}
+                    className="bg-black/30 rounded-lg p-4 sm:p-6 border border-white/10"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <img
+                          src="img/img2.png"
+                          alt="Barber photo"
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                        <h3 className="text-lg font-semibold text-yellow-500">
+                          {barberStat.name}
+                        </h3>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">
+                          {filter === "week"
+                            ? "Agendamentos da Semana"
+                            : selectedDate.toDateString() ===
+                              new Date().toDateString()
+                            ? "Agendamentos Hoje"
+                            : `Agendamentos de ${format(
+                                selectedDate,
+                                "dd/MM/yyyy",
+                                { locale: ptBR }
+                              )}`}
+                        </span>
+                        <span className="text-white font-semibold">
+                          {barberStat.total}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">
+                          {filter === "week"
+                            ? "Faturamento da Semana"
+                            : selectedDate.toDateString() ===
+                              new Date().toDateString()
+                            ? "Faturamento Hoje"
+                            : `Faturamento de ${format(
+                                selectedDate,
+                                "dd/MM/yyyy",
+                                { locale: ptBR }
+                              )}`}
+                        </span>
+                        <span className="text-yellow-500 font-semibold">
+                          R$ {barberStat.revenue.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">
+                          Agendamentos Mensais
+                        </span>
+                        <span className="text-white font-semibold">
+                          {barberStat.monthlyAppointments}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">
+                          Faturamento Mensal
+                        </span>
+                        <span className="text-blue-500 font-semibold">
+                          R$ {barberStat.monthlyRevenue.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {activeSection === "relatorio" && (
+          <>
+            {/* Filtro de Data e Período */}
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-yellow-500 mb-4">
+                Relatório
+              </h2>
+              <div className="flex items-center justify-between">
+                {/* Botões de Filtro */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setFilter("today")}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      filter === "today"
+                        ? "bg-yellow-500 text-black"
+                        : "bg-black/30 text-gray-400 hover:bg-black/50"
+                    }`}
+                  >
+                    Diário
+                  </button>
+                  <button
+                    onClick={() => setFilter("week")}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      filter === "week"
+                        ? "bg-yellow-500 text-black"
+                        : "bg-black/30 text-gray-400 hover:bg-black/50"
+                    }`}
+                  >
+                    Semanal
+                  </button>
+                </div>
+
+                {/* Navegação de Data */}
+                <div className="flex items-center gap-2 bg-black/30 px-7 py-3 rounded-md border border-white/10">
+                  <button
+                    onClick={() => {
+                      const previousDate = new Date(selectedDate);
+                      if (filter === "week") {
+                        previousDate.setDate(previousDate.getDate() - 7);
+                      } else {
+                        previousDate.setDate(previousDate.getDate() - 1);
+                      }
+                      setSelectedDate(previousDate);
+                    }}
+                    className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors"
+                  >
+                    <ChevronLeft size={30} />
+                  </button>
+                  <span className="text-white font-medium">
+                    {filter === "week" ? (
+                      <>
+                        {format(
+                          startOfWeek(selectedDate, { locale: ptBR }),
+                          "dd/MM",
+                          { locale: ptBR }
+                        )}{" "}
+                        {format(
+                          endOfWeek(selectedDate, { locale: ptBR }),
+                          "dd/MM",
+                          { locale: ptBR }
+                        )}
+                      </>
+                    ) : (
+                      format(selectedDate, "dd/MM/yyyy", { locale: ptBR })
+                    )}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const nextDate = new Date(selectedDate);
+                      if (filter === "week") {
+                        nextDate.setDate(nextDate.getDate() + 7);
+                      } else {
+                        nextDate.setDate(nextDate.getDate() + 1);
+                      }
+                      setSelectedDate(nextDate);
+                    }}
+                    className="p-1 text-yellow-500 hover:text-yellow-400 transition-colors rotate-180"
+                  >
+                    <ChevronLeft size={30} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:gap-6 mb-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Cards de Estatísticas */}
+              <div className="bg-gradient-to-br from-yellow-500/10 to-yellow-500/5 rounded-lg p-4 sm:p-6 border border-yellow-500/20">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
+                    {filter === "week"
+                      ? "Agendamentos da Semana"
+                      : "Agendamentos do Dia"}
+                  </h3>
+                  <CalendarIcon className="text-yellow-500" size={24} />
+                </div>
+                <p className="text-2xl sm:text-3xl font-bold mb-2">
+                  {stats.total}
+                </p>
+                <p className="text-sm text-gray-200">
+                  {stats.confirmed} confirmados
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-green-500/10 to-green-500/5 rounded-lg p-4 sm:p-6 border border-green-500/20">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
+                    {filter === "week"
+                      ? "Faturamento da Semana"
+                      : "Faturamento do Dia"}
+                  </h3>
+                  <DollarSign className="text-green-500" size={24} />
+                </div>
+                <p className="text-2xl sm:text-3xl font-bold mb-2">
+                  R$ {stats.revenue.toFixed(2)}
+                </p>
+                <p className="text-sm text-gray-200">
+                  {stats.confirmed} agendamentos
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 rounded-lg p-4 sm:p-6 border border-blue-500/20">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-gray-200 text-lg sm:text-xl font-semibold">
+                    Faturamento Mensal
+                  </h3>
+                  <TrendingUp className="text-blue-500" size={24} />
+                </div>
+                <p className="text-2xl sm:text-3xl font-bold mb-2">
+                  R$ {stats.monthlyRevenue.toFixed(2)}
+                </p>
+                <p className="text-sm text-gray-200">
+                  {stats.monthlyAppointments} agendamentos
+                </p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Modal de Novo Usuário */}
