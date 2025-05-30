@@ -25,6 +25,9 @@ import {
   FileText,
   LogOut,
   ChevronLeft,
+  Plus,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "../supabase";
 
@@ -44,16 +47,8 @@ interface Appointment {
   client_phone: string;
   appointment_date: string;
   status: "pending" | "confirmed" | "cancelled";
-  service: {
-    id: string;
-    name: string;
-    price: number;
-    duration: number;
-  } | null;
-  barber: {
-    id: string;
-    name: string;
-  } | null;
+  service: Service | null;
+  barber: Barber | null;
   service_id?: string;
   barber_id?: string;
   created_at?: string;
@@ -66,7 +61,7 @@ interface Service {
   duration: number;
 }
 
-interface BarberData {
+interface Barber {
   id: string;
   name: string;
 }
@@ -139,7 +134,7 @@ function Dashboard({ user }: DashboardProps) {
     monthlyAppointments: 0,
     barberStats: {},
   });
-  const [barbers, setBarbers] = useState<BarberData[]>([]);
+  const [barbers, setBarbers] = useState<Barber[]>([]);
   const [selectedBarber] = useState<string>("all");
   const [appointmentFilter, setAppointmentFilter] = useState<
     "all" | "booked" | "empty"
@@ -149,8 +144,20 @@ function Dashboard({ user }: DashboardProps) {
   const [listDate, setListDate] = useState(new Date());
   const [showSidebar, setShowSidebar] = useState(false);
   const [activeSection, setActiveSection] = useState<
-    "agendamentos" | "estatisticas" | "relatorio"
+    "agendamentos" | "estatisticas" | "relatorio" | "servicos"
   >("agendamentos");
+  const [services, setServices] = useState<Service[]>([]);
+  const [showEditServiceModal, setShowEditServiceModal] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editServiceName, setEditServiceName] = useState("");
+  const [editServicePrice, setEditServicePrice] = useState("");
+  const [editServiceDuration, setEditServiceDuration] = useState("");
+  const [showNewServiceModal, setShowNewServiceModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
+  const [newServiceName, setNewServiceName] = useState("");
+  const [newServicePrice, setNewServicePrice] = useState("");
+  const [newServiceDuration, setNewServiceDuration] = useState("");
 
   // Função para obter o período baseado no filtro
   const getPeriod = (filter: "all" | "today" | "week"): Period => {
@@ -188,6 +195,12 @@ function Dashboard({ user }: DashboardProps) {
   useEffect(() => {
     fetchListAppointments();
   }, [listDate]);
+
+  useEffect(() => {
+    if (activeSection === "servicos") {
+      fetchServices();
+    }
+  }, [activeSection]);
 
   const fetchBarbers = async () => {
     try {
@@ -260,9 +273,7 @@ function Dashboard({ user }: DashboardProps) {
         revenue:
           statsData?.reduce(
             (acc, apt) =>
-              apt.status === "confirmed" &&
-              apt.service &&
-              typeof apt.service.price === "number"
+              apt.status === "confirmed" && apt.service
                 ? acc + apt.service.price
                 : acc,
             0
@@ -299,15 +310,11 @@ function Dashboard({ user }: DashboardProps) {
 
       // Atualizar estatísticas do período selecionado
       statsData?.forEach((apt) => {
-        if (
-          apt.barber &&
-          typeof apt.barber.id === "string" &&
-          barberStats[apt.barber.id]
-        ) {
+        if (apt.barber && barberStats[apt.barber.id]) {
           barberStats[apt.barber.id].total++;
           if (apt.status === "confirmed") {
             barberStats[apt.barber.id].confirmed++;
-            if (apt.service && typeof apt.service.price === "number") {
+            if (apt.service) {
               barberStats[apt.barber.id].revenue += apt.service.price;
             }
           }
@@ -345,23 +352,16 @@ function Dashboard({ user }: DashboardProps) {
 
       if (monthlyData) {
         stats.monthlyRevenue = monthlyData.reduce(
-          (acc, apt) =>
-            apt.service && typeof apt.service.price === "number"
-              ? acc + apt.service.price
-              : acc,
+          (acc, apt) => (apt.service ? acc + apt.service.price : acc),
           0
         );
         stats.monthlyAppointments = monthlyData.length;
 
         // Atualizar estatísticas mensais por barbeiro
         monthlyData.forEach((apt) => {
-          if (
-            apt.barber &&
-            typeof apt.barber.id === "string" &&
-            barberStats[apt.barber.id]
-          ) {
+          if (apt.barber && barberStats[apt.barber.id]) {
             barberStats[apt.barber.id].monthlyAppointments++;
-            if (apt.service && typeof apt.service.price === "number") {
+            if (apt.service) {
               barberStats[apt.barber.id].monthlyRevenue += apt.service.price;
             }
           }
@@ -458,6 +458,26 @@ function Dashboard({ user }: DashboardProps) {
     }
   };
 
+  const fetchServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("services")
+        .select("*")
+        .order("name");
+
+      if (error) {
+        console.error("Erro ao buscar serviços:", error.message);
+        alert("Erro ao carregar serviços: " + error.message);
+        return;
+      }
+
+      setServices(data || []);
+    } catch (error) {
+      console.error("Erro ao buscar serviços:", error);
+      alert("Erro ao carregar serviços. Por favor, tente novamente.");
+    }
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreatingUser(true);
@@ -526,6 +546,90 @@ function Dashboard({ user }: DashboardProps) {
     return barberImageMap[barberId] || "/img/img2.png"; // Imagem padrão
   };
 
+  const handleEditService = (service: Service) => {
+    setEditingService(service);
+    setEditServiceName(service.name);
+    setEditServicePrice(service.price.toString());
+    setEditServiceDuration(service.duration.toString());
+    setShowEditServiceModal(true);
+  };
+
+  const handleUpdateService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingService) return;
+
+    try {
+      const { error } = await supabase
+        .from("services")
+        .update({
+          name: editServiceName,
+          price: parseFloat(editServicePrice),
+          duration: parseInt(editServiceDuration),
+        })
+        .eq("id", editingService.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Atualizar a lista de serviços
+      await fetchServices();
+      setShowEditServiceModal(false);
+      setEditingService(null);
+    } catch (error) {
+      console.error("Erro ao atualizar serviço:", error);
+      alert("Erro ao atualizar serviço. Por favor, tente novamente.");
+    }
+  };
+
+  const handleCreateService = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      const { error } = await supabase.from("services").insert({
+        name: newServiceName,
+        price: parseFloat(newServicePrice),
+        duration: parseInt(newServiceDuration),
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // Limpar formulário e atualizar lista
+      setNewServiceName("");
+      setNewServicePrice("");
+      setNewServiceDuration("");
+      setShowNewServiceModal(false);
+      await fetchServices();
+    } catch (error) {
+      console.error("Erro ao criar serviço:", error);
+      alert("Erro ao criar serviço. Por favor, tente novamente.");
+    }
+  };
+
+  const handleDeleteService = async () => {
+    if (!serviceToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from("services")
+        .delete()
+        .eq("id", serviceToDelete.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setShowDeleteConfirmModal(false);
+      setServiceToDelete(null);
+      await fetchServices();
+    } catch (error) {
+      console.error("Erro ao excluir serviço:", error);
+      alert("Erro ao excluir serviço. Por favor, tente novamente.");
+    }
+  };
+
   return (
     <div className="min-h-screen app-background text-white">
       {/* Menu Lateral */}
@@ -590,6 +694,20 @@ function Dashboard({ user }: DashboardProps) {
             >
               <FileText size={20} />
               <span>Relatório</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveSection("servicos");
+                setShowSidebar(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                activeSection === "servicos"
+                  ? "bg-yellow-500 text-black"
+                  : "text-gray-400 hover:bg-white/10"
+              }`}
+            >
+              <Scissors size={20} />
+              <span>Serviços</span>
             </button>
           </nav>
         </div>
@@ -1205,6 +1323,66 @@ function Dashboard({ user }: DashboardProps) {
             </div>
           </>
         )}
+
+        {activeSection === "servicos" && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-yellow-500">Serviços</h2>
+              <button
+                onClick={() => setShowNewServiceModal(true)}
+                className="px-4 py-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-400 transition-colors flex items-center gap-2"
+              >
+                <Plus size={20} />
+                <span>Novo Serviço</span>
+              </button>
+            </div>
+            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {services.map((service) => (
+                <div
+                  key={service.id}
+                  className="bg-black/30 rounded-lg p-6 border border-white/10"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-yellow-500">
+                      {service.name}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditService(service)}
+                        className="p-2 text-gray-400 hover:text-yellow-500 transition-colors"
+                      >
+                        <Edit size={20} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setServiceToDelete(service);
+                          setShowDeleteConfirmModal(true);
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Preço</span>
+                      <span className="text-white font-semibold">
+                        R$ {service.price.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Duração</span>
+                      <span className="text-white font-semibold">
+                        {service.duration} minutos
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal de Novo Usuário */}
@@ -1255,6 +1433,175 @@ function Dashboard({ user }: DashboardProps) {
                 {creatingUser ? "Criando..." : "Criar Usuário"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Serviço */}
+      {showEditServiceModal && editingService && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-black/90 rounded-lg p-4 sm:p-6 max-w-md w-full border border-white/10">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg sm:text-xl font-bold text-yellow-500">
+                Editar Serviço
+              </h2>
+              <button
+                onClick={() => setShowEditServiceModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateService} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Nome do Serviço
+                </label>
+                <input
+                  type="text"
+                  value={editServiceName}
+                  onChange={(e) => setEditServiceName(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-md text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Preço (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editServicePrice}
+                  onChange={(e) => setEditServicePrice(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-md text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Duração (minutos)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editServiceDuration}
+                  onChange={(e) => setEditServiceDuration(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-md text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-yellow-500 text-black py-2 rounded-md hover:bg-yellow-400 transition-colors font-semibold text-sm sm:text-base"
+              >
+                Salvar Alterações
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Novo Serviço */}
+      {showNewServiceModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-black/90 rounded-lg p-4 sm:p-6 max-w-md w-full border border-white/10">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg sm:text-xl font-bold text-yellow-500">
+                Novo Serviço
+              </h2>
+              <button
+                onClick={() => setShowNewServiceModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateService} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Nome do Serviço
+                </label>
+                <input
+                  type="text"
+                  value={newServiceName}
+                  onChange={(e) => setNewServiceName(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-md text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Preço (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newServicePrice}
+                  onChange={(e) => setNewServicePrice(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-md text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Duração (minutos)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={newServiceDuration}
+                  onChange={(e) => setNewServiceDuration(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-md text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm sm:text-base"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-yellow-500 text-black py-2 rounded-md hover:bg-yellow-400 transition-colors font-semibold text-sm sm:text-base"
+              >
+                Criar Serviço
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão */}
+      {showDeleteConfirmModal && serviceToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-black/90 rounded-lg p-4 sm:p-6 max-w-md w-full border border-white/10">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg sm:text-xl font-bold text-red-500">
+                Confirmar Exclusão
+              </h2>
+              <button
+                onClick={() => setShowDeleteConfirmModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <p className="text-gray-300 mb-6">
+              Tem certeza que deseja excluir o serviço "{serviceToDelete.name}"?
+              Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowDeleteConfirmModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteService}
+                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-400 transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
           </div>
         </div>
       )}
